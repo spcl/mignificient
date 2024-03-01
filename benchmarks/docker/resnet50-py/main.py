@@ -18,6 +18,7 @@ def main(image_path):
     payload = json.dumps(json_obj)
     
     ret = kernel.resnet50py(payload)
+    print("get ret category id", ret)
 
 
 if __name__ == "__main__":

@@ -46,3 +46,5 @@ def resnet50py(payload: str):
     end = timer()
     print("local finished")
     print(end - start)
+    
+    return top_catid
