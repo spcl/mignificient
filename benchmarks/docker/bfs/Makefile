@@ -1,10 +1,12 @@
 include make.config
 
 CC := $(CUDA_DIR)/bin/nvcc -cudart shared
+# CC := nvcc -cudart shared
 
 INCLUDE := /opt/cuda/include
 
-SRC = bfs.cu
+# SRC = bfs.cu
+SRC = main.cu
 
 EXE = bfs
 

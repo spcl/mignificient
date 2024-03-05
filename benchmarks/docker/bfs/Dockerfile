@@ -15,6 +15,7 @@ RUN CUDA_ARCH=compute_80
 
 RUN make clean
 
+# make CUDA_ARCH=sm_80 CUDA_DIR=$CUDA_HOME -j8
 RUN make CUDA_ARCH=$CUDA_ARCH CUDA_DIR=$CUDA_HOME -j8
 
 ENV INPUTS="/bench/graph1MW_6.txt"
