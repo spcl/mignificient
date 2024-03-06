@@ -22,6 +22,7 @@ def resnext101(payload: str):
     payload_obj = json.loads(payload)
     print("after parsing", type(base64.b64decode(payload_obj["image_data"])))
 
+    # wrapped with io.BytesIO to become a file object
     input_image = Image.open(io.BytesIO(base64.b64decode(payload_obj["image_data"])))
     
     preprocess = transforms.Compose([
