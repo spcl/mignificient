@@ -1,5 +1,6 @@
 # kernel function for resnet50
 import torch
+import io
 import json
 import base64
 from PIL import Image
@@ -22,7 +23,7 @@ def resnet50py(payload: str):
     payload_obj = json.loads(payload)
     print("after parsing", type(base64.b64decode(payload_obj["image_data"])))
     
-    input_image = Image.open(base64.b64decode(payload_obj["image_data"]))
+    input_image = Image.open(io.BytesIO(base64.b64decode(payload_obj["image_data"])))
     
     preprocess = transforms.Compose([transforms.Resize(256),transforms.CenterCrop(224),transforms.ToTensor(),transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),])
     input_tensor = preprocess(input_image)
