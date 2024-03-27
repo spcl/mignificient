@@ -1,0 +1,54 @@
+namespace gpuless.manager;
+
+enum Status : byte {
+    OK,
+    FAILURE
+}
+
+table AllocateRequest {
+    profile:int32;
+    session_id:int32;
+}
+
+table AllocateOffer {
+    status:Status;
+    session_id:int32;
+    available_profiles:[int32];
+}
+
+table AllocateSelect {
+    status:Status;
+    session_id:int32;
+    profile:int32;
+}
+
+table AllocateConfirm {
+    status:Status;
+    session_id:int32;
+    ip:uint32;
+    port:uint16;
+}
+
+table DeallocateRequest {
+    session_id:int32;
+}
+
+table DeallocateConfirm {
+    status:Status;
+    session_id:int32;
+}
+
+union Message {
+    AllocateRequest,
+    AllocateOffer,
+    AllocateSelect,
+    AllocateConfirm,
+    DeallocateRequest,
+    DeallocateConfirm
+}
+
+table ProtocolMessage {
+    message: Message;
+}
+
+root_type ProtocolMessage;

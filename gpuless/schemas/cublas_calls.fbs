@@ -1,0 +1,134 @@
+table FBCublasCreateV2 {
+    virtual_handle:uint64;
+}
+
+table FBCublasSetStreamV2 {
+    virtual_handle:uint64;
+    stream:uint64;
+}
+
+table FBCublasSetMathMode {
+    virtual_handle:uint64;
+    math_mode:uint64;
+}
+
+table FBCublasSgemmV2 {
+    virtual_handle:uint64;
+    transa_op:uint64;
+    transb_op:uint64;
+    m:int;
+    n:int;
+    k:int;
+    alpha:float;
+    beta:float;
+    a:uint64;
+    b:uint64;
+    c:uint64;
+    lda:int;
+    ldb:int;
+    ldc:int;
+}
+
+table FBCublasLtCreate {
+    virtual_handle:uint64;
+}
+
+table FBCublasLtMatmulDescCreate {
+    virtual_mmd:uint64;
+    compute_type:uint64;
+    scale_type:uint64;
+}
+
+table FBCublasLtMatmulDescDestroy {
+    virtual_mmd:uint64;
+}
+
+table FBCublasLtMatmulDescSetAttribute {
+    virtual_mmd:uint64;
+    attr:uint64;
+    buf:[uint8];
+}
+
+table FBCublasLtMatmul {
+    virtual_handle:uint64;
+    virtual_mmd:uint64;
+    alpha:[uint8];
+    beta:[uint8];
+    a:uint64;
+    b:uint64;
+    c:uint64;
+    d:uint64;
+    virtual_ml_a_desc:uint64;
+    virtual_ml_b_desc:uint64;
+    virtual_ml_c_desc:uint64;
+    virtual_ml_d_desc:uint64;
+    algo:[uint64];
+    algo_is_null:uint64;
+    workspace:uint64;
+    workspace_size_in_bytes:uint64;
+    stream:uint64;
+}
+
+table FBCublasLtMatrixLayoutCreate {
+    virtual_ml:uint64;
+    data_type:uint64;
+    rows:uint64;
+    cols:uint64;
+    ld:int64;
+}
+
+table FBCublasLtMatrixLayoutDestroy {
+    virtual_ml:uint64;
+}
+
+table FBCublasLtMatrixLayoutSetAttribute {
+    virtual_ml:uint64;
+    attr:uint64;
+    buf:[uint8];
+}
+
+table FBCublasSgemmStridedBatched {
+    virtual_handle:uint64;
+    transa:uint64;
+    transb:uint64;
+    m:int;
+    n:int;
+    k:int;
+    alpha:float;
+    a:uint64;
+    lda:int;
+    stride_a:int64;
+    b:uint64;
+    ldb:int;
+    stride_b:int64;
+    beta:float;
+    c:uint64;
+    ldc:int;
+    stride_c:int64;
+    batch_count:int;
+}
+
+table FBCublasLtMatmulPreferenceCreate {
+    virtual_mmp:uint64;
+}
+
+table FBCublasLtMatmulPreferenceDestroy {
+    virtual_mmp:uint64;
+}
+
+table FBCublasLtMatmulPreferenceSetAttribute {
+    virtual_mmp:uint64;
+    attr:uint64;
+    buf:[uint8];
+}
+
+table FBCublasLtMatmulAlgoGetHeuristic {
+    virtual_handle:uint64;
+    virtual_mmd:uint64;
+    virtual_ml_a_desc:uint64;
+    virtual_ml_b_desc:uint64;
+    virtual_ml_c_desc:uint64;
+    virtual_ml_d_desc:uint64;
+    virtual_mmp:uint64;
+    virtual_alg:uint64;
+}

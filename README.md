@@ -1,1 +1,9 @@
 # mignificient
+
+
+
+# Dependencies
+
+flatbuffers
+
+libbibery

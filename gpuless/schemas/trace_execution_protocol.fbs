@@ -1,0 +1,117 @@
+include "cuda_runtime_calls.fbs";
+include "cublas_calls.fbs";
+include "cudnn_calls.fbs";
+include "cudevice_attributes.fbs";
+
+namespace gpuless;
+
+enum FBStatus : byte {
+    OK,
+    FAILURE
+}
+
+union FBCudaApiCallUnion {
+    // cuda
+    FBCudaMalloc,
+    FBCudaMemcpyH2D,
+    FBCudaMemcpyD2H,
+    FBCudaMemcpyD2D,
+    FBCudaMemcpyAsyncH2D,
+    FBCudaMemcpyAsyncD2H,
+    FBCudaMemcpyAsyncD2D,
+    FBCudaLaunchKernel,
+    FBCudaFree,
+    FBCudaStreamSynchronize,
+    FBCudaGetDeviceProperties,
+    FBCudaDeviceSynchronize,
+    FBCudaFuncGetAttributes,
+
+    // cuBLAS
+    FBCublasCreateV2,
+    FBCublasSetStreamV2,
+    FBCublasSetMathMode,
+    FBCublasSgemmV2,
+    FBCublasLtCreate,
+    FBCublasLtMatmulDescCreate,
+    FBCublasLtMatmulDescDestroy,
+    FBCublasLtMatmulDescSetAttribute,
+    FBCublasLtMatmul,
+    FBCublasLtMatrixLayoutCreate,
+    FBCublasLtMatrixLayoutDestroy,
+    FBCublasLtMatrixLayoutSetAttribute,
+    FBCublasSgemmStridedBatched,
+    FBCublasLtMatmulPreferenceCreate,
+    FBCublasLtMatmulPreferenceDestroy,
+    FBCublasLtMatmulPreferenceSetAttribute,
+    FBCublasLtMatmulAlgoGetHeuristic,
+
+    // cuDNN
+    FBCudnnCreate,
+    FBCudnnSetStream,
+    FBCudnnCreateTensorDescriptor,
+    FBCudnnSetTensorNdDescriptor,
+    FBCudnnCreateFilterDescriptor,
+    FBCudnnSetFilterNdDescriptor,
+    FBCudnnCreateConvolutionDescriptor,
+    FBCudnnSetConvolutionGroupCount ,
+    FBCudnnSetConvolutionMathType,
+    FBCudnnSetConvolutionNdDescriptor,
+    FBCudnnGetConvolutionForwardAlgorithmV7,
+    FBCudnnConvolutionForward,
+    FBCudnnBatchNormalizationForwardInference,
+    FBCudnnDestroyConvolutionDescriptor,
+    FBCudnnDestroyFilterDescriptor,
+    FBCudnnDestroyTensorDescriptor,
+    FBCudnnConvolutionBackwardData,
+    FBCudnnGetConvolutionBackwardDataAlgorithmV7,
+    FBCudnnGetBatchNormalizationForwardTrainingExWorkspaceSize,
+    FBCudnnGetBatchNormalizationTrainingExReserveSpaceSize,
+    FBCudnnBatchNormalizationForwardTrainingEx,
+}
+
+table FBCudaApiCall {
+    api_call:FBCudaApiCallUnion;
+}
+
+table FBNewModule {
+    buffer:[uint8];
+    module_id:uint64;
+}
+
+table FBNewFunction {
+    symbol:string;
+    module_id:uint64;
+}
+
+table FBTraceExecRequest {
+    trace:[FBCudaApiCall];
+    new_modules:[FBNewModule];
+    new_functions:[FBNewFunction];
+}
+
+table FBTraceExecResponse {
+    status:FBStatus;
+    trace_top:FBCudaApiCall;
+}
+
+table FBTraceAttributeRequest {
+}
+
+table FBTraceAttributeResponse {
+    status:FBStatus;
+    total_mem:uint64;
+    device_attributes:[CUdeviceAttributeValue];
+}
+
+union FBMessage {
+    FBTraceExecRequest,
+    FBTraceExecResponse,
+    FBTraceAttributeRequest,
+    FBTraceAttributeResponse
+}
+
+table FBProtocolMessage {
+    message:FBMessage;
+}
+
+root_type FBProtocolMessage;
