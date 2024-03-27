@@ -26,3 +26,5 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/external/flatbuffers
                  ${EXTERNAL_INSTALL_LOCATION}/flatbuffers-build
                  EXCLUDE_FROM_ALL)
 
+add_subdirectory(${CMAKE_SOURCE_DIR}/external/iceoryx/iceoryx_meta
+                 ${EXTERNAL_INSTALL_LOCATION}/iceoryx-build)

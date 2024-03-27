@@ -1,3 +1,6 @@
 [submodule "external/flatbuffers"]
 	path = external/flatbuffers
 	url = https://github.com/google/flatbuffers.git
+[submodule "external/iceoryx"]
+	path = external/iceoryx
+	url = https://github.com/eclipse-iceoryx/iceoryx.git
