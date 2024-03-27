@@ -26,6 +26,22 @@ enum instance_profile : int32_t {
     MIG_7g40gb = 0,
 };
 
+typedef std::tuple<std::string, int, int> device_t;
+typedef std::vector<device_t> devices_t;
+
+struct TCPServer {
+  int socket_fd;
+
+  void setup(const devices_t & devices);
+  void loop();
+  void finish();
+};
+
+struct ShmemServer {
+
+
+};
+
 } // namespace manager
 } // namespace gpuless
 

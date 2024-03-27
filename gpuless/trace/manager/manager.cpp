@@ -206,25 +206,8 @@ void sigint_handler(int signum) {
     exit(signum);
 }
 
-int main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
-
-    signal(SIGINT, sigint_handler);
-
-    // load log level from env variable SPDLOG_LEVEL
-    spdlog::cfg::load_env_levels();
-
-    // set manager ip if given as environment variable
-    char *manager_ip_env = std::getenv("MANAGER_IP");
-    if (manager_ip_env) {
-        manager_ip = manager_ip_env;
-        SPDLOG_INFO("MANAGER_IP={}", manager_ip);
-    }
-
-    // setup devices
-    setup_devices();
-
+void TCPServer::setup(const devices_t & devices)
+{
     // start device management processes
     short next_port = MANAGER_PORT + 1;
     for (const auto &t : devices) {
@@ -238,7 +221,7 @@ int main(int argc, char **argv) {
     }
 
     // run server
-    int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+    socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd < 0) {
         SPDLOG_ERROR("failed to open socket");
         exit(EXIT_FAILURE);
@@ -263,7 +246,10 @@ int main(int argc, char **argv) {
         close(socket_fd);
         exit(EXIT_FAILURE);
     }
+}
 
+void TCPServer::loop()
+{
     SPDLOG_INFO("manager running on port {}", MANAGER_PORT);
 
     int s_new;
@@ -279,7 +265,39 @@ int main(int argc, char **argv) {
         pthread_t t;
         pthread_create(&t, nullptr, &handle_request, s_new_alloc);
     }
+}
 
+void TCPServer::finish()
+{
     close(socket_fd);
+}
+
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+
+    signal(SIGINT, sigint_handler);
+
+    // load log level from env variable SPDLOG_LEVEL
+    spdlog::cfg::load_env_levels();
+
+    // set manager ip if given as environment variable
+    char *manager_ip_env = std::getenv("MANAGER_IP");
+    if (manager_ip_env) {
+        manager_ip = manager_ip_env;
+        SPDLOG_INFO("MANAGER_IP={}", manager_ip);
+    }
+
+    TCPServer server;
+
+    // setup devices
+    setup_devices();
+
+    server.setup(devices);
+
+    server.loop();
+
+    server.finish();
+
     return EXIT_SUCCESS;
 }
