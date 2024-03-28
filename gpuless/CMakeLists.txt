@@ -123,6 +123,7 @@ add_library(gpuless SHARED
     trace/cuda_virtual_device.cpp
     trace/trace_executor_local.cpp
     trace/trace_executor_tcp_client.cpp
+    trace/trace_executor_shmem_client.cpp
     trace/dlsym_util.cpp
     utils.cpp
     trace/cubin_analysis.cpp)

@@ -29,8 +29,8 @@ class TraceExecutorShmem : public TraceExecutor {
     TraceExecutorShmem();
     ~TraceExecutorShmem();
 
-    static void init_runtime();
-    static void reset_runtime();
+    //static void init_runtime();
+    //static void reset_runtime();
 
     bool init(const char *ip, short port,
               manager::instance_profile profile) override;

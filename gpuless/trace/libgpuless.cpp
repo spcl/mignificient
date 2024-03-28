@@ -126,7 +126,7 @@ std::shared_ptr<TraceExecutor> getTraceExecutor(bool clean) {
 
         } else if (useShmem){
 
-            TraceExecutorShmem::init_runtime();
+            //TraceExecutorShmem::init_runtime();
             trace_executor = std::make_shared<TraceExecutorShmem>();
             bool r = trace_executor->init(manager_ip, manager_port,
                                           manager::instance_profile::NO_MIG);
@@ -176,7 +176,7 @@ static void exitHandler() {
               << std::endl;
 
     // deallocate session
-    if (useTcp) {
+    if (useTcp || useShmem) {
         auto success = getTraceExecutor()->deallocate();
         if (!success) {
             SPDLOG_ERROR("Failed to deallocate session");

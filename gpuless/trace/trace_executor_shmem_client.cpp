@@ -230,7 +230,7 @@ bool TraceExecutorShmem::synchronize(CudaTrace &cuda_trace) {
                 std::chrono::duration_cast<std::chrono::microseconds>(e1 - s1).count() /
                 1000000.0;
             std::cerr << d1 << std::endl;
-            this->synchronize_total_time_2 += d1;
+            //this->synchronize_total_time_2 += d1;
             client->releaseResponse(responsePayload);
         }
         else

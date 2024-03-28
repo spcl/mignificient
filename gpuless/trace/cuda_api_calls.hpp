@@ -42,10 +42,7 @@ class CudaMemcpyH2D : public CudaRuntimeApiCall {
     void *dst;
     const void *src;
     size_t size;
-    //uint8_t* buffer;
     std::vector<uint8_t> buffer;
-    //std::vector<char> buffer;
-    //char* buffer_;
 
     CudaMemcpyH2D(void *dst, const void *src, size_t size);
     explicit CudaMemcpyH2D(const FBCudaApiCall *fb_cuda_api_call);
@@ -63,7 +60,6 @@ class CudaMemcpyD2H : public CudaRuntimeApiCall {
     const void *src;
     size_t size;
     std::vector<uint8_t> buffer;
-    //std::vector<char> buffer;
 
     CudaMemcpyD2H(void *dst, const void *src, size_t size);
     explicit CudaMemcpyD2H(const FBCudaApiCall *fb_cuda_api_call);
