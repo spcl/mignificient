@@ -30,6 +30,9 @@ static bool useTcp = true;
 static bool useShmem = true;
 static void exitHandler();
 
+// FIXME: singleton
+static MemPool* pool = nullptr;
+
 static void hijackInit() {
     static bool hijack_initialized = false;
     if (!hijack_initialized) {
@@ -127,9 +130,12 @@ std::shared_ptr<TraceExecutor> getTraceExecutor(bool clean) {
         } else if (useShmem){
 
             //TraceExecutorShmem::init_runtime();
-            trace_executor = std::make_shared<TraceExecutorShmem>();
+            auto exec = std::make_shared<TraceExecutorShmem>();
+            pool = &exec->_pool;
+            trace_executor = exec;
             bool r = trace_executor->init(manager_ip, manager_port,
                                           manager::instance_profile::NO_MIG);
+
 
         } else {
             trace_executor = std::make_shared<TraceExecutorLocal>();
@@ -280,13 +286,24 @@ cudaError_t cudaMemcpy(void *dst, const void *src, size_t count,
     if (kind == cudaMemcpyHostToDevice) {
         SPDLOG_INFO("{}() [cudaMemcpyHostToDevice, {} <- {}, pid={}]", __func__,
                     dst, src, getpid());
-        auto rec = std::make_shared<CudaMemcpyH2D>(dst, src, count);
 
-        // Host side - we copy the data for sending
-        std::memcpy(rec->buffer.data(), src, count);
+
+        if(pool) {
+
+          auto chunk = pool->get();
+          auto rec = std::make_shared<CudaMemcpyH2D>(dst, src, count, chunk.name);
+          std::memcpy(chunk.ptr, src, count);
+
+          getCudaTrace().record(rec);
+        } else {
+          auto rec = std::make_shared<CudaMemcpyH2D>(dst, src, count);
+
+          // Host side - we copy the data for sending
+          std::memcpy(rec->buffer.data(), src, count);
+          getCudaTrace().record(rec);
+        }
         //std::memcpy(rec->buffer_ptr, src, count);
   
-        getCudaTrace().record(rec);
     } else if (kind == cudaMemcpyDeviceToHost) {
         SPDLOG_INFO("{}() [cudaMemcpyDeviceToHost, {} <- {}, pid={}]", __func__,
                     dst, src, getpid());

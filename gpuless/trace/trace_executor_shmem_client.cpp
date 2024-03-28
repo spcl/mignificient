@@ -198,6 +198,16 @@ bool TraceExecutorShmem::synchronize(CudaTrace &cuda_trace) {
     //! [take response]
     std::shared_ptr<AbstractCudaApiCall> cuda_api_call = nullptr;
 
+    // return chunks
+    for(auto & call : cuda_trace.callStack()) {
+
+      if(auto* ptr = dynamic_cast<CudaMemcpyH2D*>(call.get())) {
+        _pool.give(ptr->shared_name);
+      
+      }
+
+    }
+
     // FIXME: waitset
     while(true) {
 

@@ -32,7 +32,7 @@ class CudaTrace {
 
     const std::shared_ptr<AbstractCudaApiCall> &historyTop();
     void setHistoryTop(std::shared_ptr<AbstractCudaApiCall> top);
-    std::vector<std::shared_ptr<AbstractCudaApiCall>> callStack();
+    std::vector<std::shared_ptr<AbstractCudaApiCall>>& callStack();
 
     std::map<std::string, std::pair<uint64_t, bool>> &getSymbolToModuleId();
     std::map<uint64_t, std::tuple<void *, uint64_t, bool>> &

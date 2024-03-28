@@ -19,6 +19,8 @@
 #include "../cuda_trace_converter.hpp"
 #include "manager_device.hpp"
 
+#include "../trace_executor_shmem_client.hpp"
+
 extern const int BACKLOG;
 
 static bool g_device_initialized = false;

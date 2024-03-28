@@ -27,7 +27,7 @@ const std::shared_ptr<AbstractCudaApiCall> &CudaTrace::historyTop() {
     return this->synchronized_history_.back();
 }
 
-std::vector<std::shared_ptr<AbstractCudaApiCall>> CudaTrace::callStack() {
+std::vector<std::shared_ptr<AbstractCudaApiCall>>& CudaTrace::callStack() {
     return this->call_stack_;
 }
 

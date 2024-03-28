@@ -44,8 +44,10 @@ class CudaMemcpyH2D : public CudaRuntimeApiCall {
     size_t size;
     std::vector<uint8_t> buffer;
     uint8_t* buffer_ptr;
+    std::string shared_name;
 
     CudaMemcpyH2D(void *dst, const void *src, size_t size);
+    CudaMemcpyH2D(void *dst, const void *src, size_t size, std::string shared_name);
     explicit CudaMemcpyH2D(const FBCudaApiCall *fb_cuda_api_call);
 
     uint64_t executeNative(CudaVirtualDevice &vdev) override;
@@ -62,6 +64,7 @@ class CudaMemcpyD2H : public CudaRuntimeApiCall {
     size_t size;
     std::vector<uint8_t> buffer;
     uint8_t* buffer_ptr;
+    std::string shared_name;
 
     CudaMemcpyD2H(void *dst, const void *src, size_t size);
     explicit CudaMemcpyD2H(const FBCudaApiCall *fb_cuda_api_call);
