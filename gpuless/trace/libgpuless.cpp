@@ -307,15 +307,35 @@ cudaError_t cudaMemcpy(void *dst, const void *src, size_t count,
     } else if (kind == cudaMemcpyDeviceToHost) {
         SPDLOG_INFO("{}() [cudaMemcpyDeviceToHost, {} <- {}, pid={}]", __func__,
                     dst, src, getpid());
-        auto rec = std::make_shared<CudaMemcpyD2H>(dst, src, count);
-        getCudaTrace().record(rec);
-        getTraceExecutor()->synchronize(getCudaTrace());
 
-        std::shared_ptr<CudaMemcpyD2H> top =
-            (const std::shared_ptr<CudaMemcpyD2H> &)getCudaTrace().historyTop();
-        //std::memcpy(dst, top->buffer, count);
-        // Host side - we copy the received data
-        std::memcpy(dst, top->buffer_ptr, count);
+
+        if(pool) {
+          auto chunk = pool->get();
+          std::cerr << "d2h " << " " << chunk.name << " " << chunk.ptr << std::endl;
+          auto rec = std::make_shared<CudaMemcpyD2H>(dst, src, count, chunk.name);
+          getCudaTrace().record(rec);
+          getTraceExecutor()->synchronize(getCudaTrace());
+
+          //std::shared_ptr<CudaMemcpyD2H> top =
+          //    (const std::shared_ptr<CudaMemcpyD2H> &)getCudaTrace().historyTop();
+          //std::memcpy(dst, top->buffer, count);
+          // Host side - we copy the received data
+          std::memcpy(dst, chunk.ptr, count);
+
+          pool->give(chunk.name);
+
+        } else {
+          auto rec = std::make_shared<CudaMemcpyD2H>(dst, src, count);
+
+          getCudaTrace().record(rec);
+          getTraceExecutor()->synchronize(getCudaTrace());
+
+          std::shared_ptr<CudaMemcpyD2H> top =
+              (const std::shared_ptr<CudaMemcpyD2H> &)getCudaTrace().historyTop();
+          //std::memcpy(dst, top->buffer, count);
+          // Host side - we copy the received data
+          std::memcpy(dst, top->buffer_ptr, count);
+        }
 
         //        auto *dstb = reinterpret_cast<uint8_t *>(dst);
         //        SPDLOG_DEBUG("cudaMemcpyD2H memory probe: {:x} {:x} {:x}

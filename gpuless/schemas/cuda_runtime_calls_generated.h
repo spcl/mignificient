@@ -367,7 +367,8 @@ struct FBCudaMemcpyH2D FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     VT_DST = 4,
     VT_SRC = 6,
     VT_SIZE = 8,
-    VT_BUFFER = 10
+    VT_MMAP = 10,
+    VT_BUFFER = 12
   };
   uint64_t dst() const {
     return GetField<uint64_t>(VT_DST, 0);
@@ -378,6 +379,9 @@ struct FBCudaMemcpyH2D FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   uint64_t size() const {
     return GetField<uint64_t>(VT_SIZE, 0);
   }
+  const flatbuffers::String *mmap() const {
+    return GetPointer<const flatbuffers::String *>(VT_MMAP);
+  }
   const flatbuffers::Vector<uint8_t> *buffer() const {
     return GetPointer<const flatbuffers::Vector<uint8_t> *>(VT_BUFFER);
   }
@@ -386,6 +390,8 @@ struct FBCudaMemcpyH2D FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
            VerifyField<uint64_t>(verifier, VT_DST) &&
            VerifyField<uint64_t>(verifier, VT_SRC) &&
            VerifyField<uint64_t>(verifier, VT_SIZE) &&
+           VerifyOffset(verifier, VT_MMAP) &&
+           verifier.VerifyString(mmap()) &&
            VerifyOffset(verifier, VT_BUFFER) &&
            verifier.VerifyVector(buffer()) &&
            verifier.EndTable();
@@ -404,6 +410,9 @@ struct FBCudaMemcpyH2DBuilder {
   }
   void add_size(uint64_t size) {
     fbb_.AddElement<uint64_t>(FBCudaMemcpyH2D::VT_SIZE, size, 0);
+  }
+  void add_mmap(flatbuffers::Offset<flatbuffers::String> mmap) {
+    fbb_.AddOffset(FBCudaMemcpyH2D::VT_MMAP, mmap);
   }
   void add_buffer(flatbuffers::Offset<flatbuffers::Vector<uint8_t>> buffer) {
     fbb_.AddOffset(FBCudaMemcpyH2D::VT_BUFFER, buffer);
@@ -424,12 +433,14 @@ inline flatbuffers::Offset<FBCudaMemcpyH2D> CreateFBCudaMemcpyH2D(
     uint64_t dst = 0,
     uint64_t src = 0,
     uint64_t size = 0,
+    flatbuffers::Offset<flatbuffers::String> mmap = 0,
     flatbuffers::Offset<flatbuffers::Vector<uint8_t>> buffer = 0) {
   FBCudaMemcpyH2DBuilder builder_(_fbb);
   builder_.add_size(size);
   builder_.add_src(src);
   builder_.add_dst(dst);
   builder_.add_buffer(buffer);
+  builder_.add_mmap(mmap);
   return builder_.Finish();
 }
 
@@ -438,13 +449,16 @@ inline flatbuffers::Offset<FBCudaMemcpyH2D> CreateFBCudaMemcpyH2DDirect(
     uint64_t dst = 0,
     uint64_t src = 0,
     uint64_t size = 0,
+    const char *mmap = nullptr,
     const std::vector<uint8_t> *buffer = nullptr) {
+  auto mmap__ = mmap ? _fbb.CreateString(mmap) : 0;
   auto buffer__ = buffer ? _fbb.CreateVector<uint8_t>(*buffer) : 0;
   return CreateFBCudaMemcpyH2D(
       _fbb,
       dst,
       src,
       size,
+      mmap__,
       buffer__);
 }
 
@@ -454,7 +468,8 @@ struct FBCudaMemcpyD2H FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     VT_DST = 4,
     VT_SRC = 6,
     VT_SIZE = 8,
-    VT_BUFFER = 10
+    VT_MMAP = 10,
+    VT_BUFFER = 12
   };
   uint64_t dst() const {
     return GetField<uint64_t>(VT_DST, 0);
@@ -465,6 +480,9 @@ struct FBCudaMemcpyD2H FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   uint64_t size() const {
     return GetField<uint64_t>(VT_SIZE, 0);
   }
+  const flatbuffers::String *mmap() const {
+    return GetPointer<const flatbuffers::String *>(VT_MMAP);
+  }
   const flatbuffers::Vector<uint8_t> *buffer() const {
     return GetPointer<const flatbuffers::Vector<uint8_t> *>(VT_BUFFER);
   }
@@ -473,6 +491,8 @@ struct FBCudaMemcpyD2H FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
            VerifyField<uint64_t>(verifier, VT_DST) &&
            VerifyField<uint64_t>(verifier, VT_SRC) &&
            VerifyField<uint64_t>(verifier, VT_SIZE) &&
+           VerifyOffset(verifier, VT_MMAP) &&
+           verifier.VerifyString(mmap()) &&
            VerifyOffset(verifier, VT_BUFFER) &&
            verifier.VerifyVector(buffer()) &&
            verifier.EndTable();
@@ -491,6 +511,9 @@ struct FBCudaMemcpyD2HBuilder {
   }
   void add_size(uint64_t size) {
     fbb_.AddElement<uint64_t>(FBCudaMemcpyD2H::VT_SIZE, size, 0);
+  }
+  void add_mmap(flatbuffers::Offset<flatbuffers::String> mmap) {
+    fbb_.AddOffset(FBCudaMemcpyD2H::VT_MMAP, mmap);
   }
   void add_buffer(flatbuffers::Offset<flatbuffers::Vector<uint8_t>> buffer) {
     fbb_.AddOffset(FBCudaMemcpyD2H::VT_BUFFER, buffer);
@@ -511,12 +534,14 @@ inline flatbuffers::Offset<FBCudaMemcpyD2H> CreateFBCudaMemcpyD2H(
     uint64_t dst = 0,
     uint64_t src = 0,
     uint64_t size = 0,
+    flatbuffers::Offset<flatbuffers::String> mmap = 0,
     flatbuffers::Offset<flatbuffers::Vector<uint8_t>> buffer = 0) {
   FBCudaMemcpyD2HBuilder builder_(_fbb);
   builder_.add_size(size);
   builder_.add_src(src);
   builder_.add_dst(dst);
   builder_.add_buffer(buffer);
+  builder_.add_mmap(mmap);
   return builder_.Finish();
 }
 
@@ -525,13 +550,16 @@ inline flatbuffers::Offset<FBCudaMemcpyD2H> CreateFBCudaMemcpyD2HDirect(
     uint64_t dst = 0,
     uint64_t src = 0,
     uint64_t size = 0,
+    const char *mmap = nullptr,
     const std::vector<uint8_t> *buffer = nullptr) {
+  auto mmap__ = mmap ? _fbb.CreateString(mmap) : 0;
   auto buffer__ = buffer ? _fbb.CreateVector<uint8_t>(*buffer) : 0;
   return CreateFBCudaMemcpyD2H(
       _fbb,
       dst,
       src,
       size,
+      mmap__,
       buffer__);
 }
 

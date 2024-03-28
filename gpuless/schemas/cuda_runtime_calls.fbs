@@ -46,6 +46,7 @@ table FBCudaMemcpyH2D {
     dst:uint64;
     src:uint64;
     size:uint64;
+    mmap:string;
     buffer:[uint8];
 }
 
@@ -53,6 +54,7 @@ table FBCudaMemcpyD2H {
     dst:uint64;
     src:uint64;
     size:uint64;
+    mmap:string;
     buffer:[uint8];
 }
 

@@ -67,6 +67,7 @@ class CudaMemcpyD2H : public CudaRuntimeApiCall {
     std::string shared_name;
 
     CudaMemcpyD2H(void *dst, const void *src, size_t size);
+    CudaMemcpyD2H(void *dst, const void *src, size_t size, std::string shared_name);
     explicit CudaMemcpyD2H(const FBCudaApiCall *fb_cuda_api_call);
 
     uint64_t executeNative(CudaVirtualDevice &vdev) override;
