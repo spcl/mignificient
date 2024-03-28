@@ -61,6 +61,6 @@ struct CudaRegisterState {
 };
 
 gpuless::CudaTrace &getCudaTrace();
-std::shared_ptr<gpuless::TraceExecutor> getTraceExecutor();
+std::shared_ptr<gpuless::TraceExecutor> getTraceExecutor(bool clean = false);
 
 #endif // __LIBGPULESS_HPP__

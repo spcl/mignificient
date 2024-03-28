@@ -2,6 +2,7 @@
 #include "cublas_api_calls.hpp"
 #include "cuda_trace.hpp"
 #include "cudnn_api_calls.hpp"
+#include "manager/manager_device.hpp"
 #include <spdlog/spdlog.h>
 
 namespace gpuless {
@@ -9,6 +10,7 @@ namespace gpuless {
 void CudaTraceConverter::traceToExecRequest(
     CudaTrace &cuda_trace, flatbuffers::FlatBufferBuilder &builder) {
     std::vector<flatbuffers::Offset<FBCudaApiCall>> fb_call_trace;
+
     for (auto &c : cuda_trace.callStack()) {
         SPDLOG_DEBUG("Serializing api call: {}", c->typeName());
         fb_call_trace.push_back(c->fbSerialize(builder));
@@ -96,13 +98,25 @@ CudaTraceConverter::fbAbstractCudaApiCallDeserialize(
     case FBCudaApiCallUnion_FBCudaMalloc:
         cuda_api_call = std::make_shared<CudaMalloc>(fb_cuda_api_call);
         break;
-    case FBCudaApiCallUnion_FBCudaMemcpyH2D:
+    case FBCudaApiCallUnion_FBCudaMemcpyH2D: {
+        auto s = std::chrono::high_resolution_clock::now();
         cuda_api_call = std::make_shared<CudaMemcpyH2D>(fb_cuda_api_call);
+        auto e = std::chrono::high_resolution_clock::now();
+        auto d =
+            std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
+            1000000.0;
+        std::cerr << "h2d deser " << d << std::endl;
         break;
-    case FBCudaApiCallUnion_FBCudaMemcpyD2H:
+    } case FBCudaApiCallUnion_FBCudaMemcpyD2H: {
+        auto s = std::chrono::high_resolution_clock::now();
         cuda_api_call = std::make_shared<CudaMemcpyD2H>(fb_cuda_api_call);
+        auto e = std::chrono::high_resolution_clock::now();
+        auto d =
+            std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
+            1000000.0;
+        std::cerr << "d2h deser " << d << std::endl;
         break;
-    case FBCudaApiCallUnion_FBCudaMemcpyD2D:
+    } case FBCudaApiCallUnion_FBCudaMemcpyD2D:
         cuda_api_call = std::make_shared<CudaMemcpyD2D>(fb_cuda_api_call);
         break;
     case FBCudaApiCallUnion_FBCudaMemcpyAsyncH2D:

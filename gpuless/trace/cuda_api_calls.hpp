@@ -14,6 +14,7 @@
 #include "cubin_analysis.hpp"
 #include "cuda_virtual_device.hpp"
 #include "flatbuffers/flatbuffers.h"
+#include "manager/manager_device.hpp"
 
 namespace gpuless {
 
@@ -41,7 +42,10 @@ class CudaMemcpyH2D : public CudaRuntimeApiCall {
     void *dst;
     const void *src;
     size_t size;
+    //uint8_t* buffer;
     std::vector<uint8_t> buffer;
+    //std::vector<char> buffer;
+    //char* buffer_;
 
     CudaMemcpyH2D(void *dst, const void *src, size_t size);
     explicit CudaMemcpyH2D(const FBCudaApiCall *fb_cuda_api_call);
@@ -50,6 +54,7 @@ class CudaMemcpyH2D : public CudaRuntimeApiCall {
 
     flatbuffers::Offset<FBCudaApiCall>
     fbSerialize(flatbuffers::FlatBufferBuilder &builder) override;
+
 };
 
 class CudaMemcpyD2H : public CudaRuntimeApiCall {
@@ -58,6 +63,7 @@ class CudaMemcpyD2H : public CudaRuntimeApiCall {
     const void *src;
     size_t size;
     std::vector<uint8_t> buffer;
+    //std::vector<char> buffer;
 
     CudaMemcpyD2H(void *dst, const void *src, size_t size);
     explicit CudaMemcpyD2H(const FBCudaApiCall *fb_cuda_api_call);
@@ -66,6 +72,7 @@ class CudaMemcpyD2H : public CudaRuntimeApiCall {
 
     flatbuffers::Offset<FBCudaApiCall>
     fbSerialize(flatbuffers::FlatBufferBuilder &builder) override;
+
 };
 
 class CudaMemcpyD2D : public CudaRuntimeApiCall {

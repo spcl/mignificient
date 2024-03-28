@@ -50,18 +50,34 @@ CudaMemcpyH2D::CudaMemcpyH2D(void *dst, const void *src, size_t size)
 uint64_t CudaMemcpyH2D::executeNative(CudaVirtualDevice &vdev) {
     static auto real =
         (decltype(&cudaMemcpy))real_dlsym(RTLD_NEXT, "cudaMemcpy");
-    return real(this->dst, this->buffer.data(), this->size,
-                cudaMemcpyHostToDevice);
+    auto s = std::chrono::high_resolution_clock::now();
+    auto val = real(this->dst, this->buffer.data(), this->size, cudaMemcpyHostToDevice);
+    //auto val = real(this->dst, this->buffer_, this->size,
+    //            cudaMemcpyHostToDevice);
+    auto e = std::chrono::high_resolution_clock::now();
+    auto d =
+        std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
+        1000000.0;
+    std::cerr << "h2d " << d << " " << size << std::endl;
+    return val;
 }
 
 flatbuffers::Offset<FBCudaApiCall>
 CudaMemcpyH2D::fbSerialize(flatbuffers::FlatBufferBuilder &builder) {
+
+    auto s = std::chrono::high_resolution_clock::now();
     auto api_call =
         CreateFBCudaMemcpyH2D(builder, reinterpret_cast<uint64_t>(this->dst),
                               reinterpret_cast<uint64_t>(this->src), this->size,
                               builder.CreateVector(this->buffer));
     auto api_call_union = CreateFBCudaApiCall(
         builder, FBCudaApiCallUnion_FBCudaMemcpyH2D, api_call.Union());
+    auto e = std::chrono::high_resolution_clock::now();
+    auto d =
+        std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
+        1000000.0;
+
+    std::cerr << "h2d ser " << d << std::endl;
     return api_call_union;
 }
 
@@ -72,6 +88,9 @@ CudaMemcpyH2D::CudaMemcpyH2D(const FBCudaApiCall *fb_cuda_api_call) {
     this->size = c->size();
     this->buffer = std::vector<uint8_t>(c->size());
     std::memcpy(this->buffer.data(), c->buffer()->data(), c->buffer()->size());
+    //this->buffer = const_cast<uint8_t*>(c->buffer()->data());
+    //this->buffer_ = const_cast<uint8_t*>(c->buffer()->data());
+    //this->buffer_ = const_cast<char*>(c->buffer()->data());
 }
 
 /*
@@ -89,10 +108,17 @@ uint64_t CudaMemcpyD2H::executeNative(CudaVirtualDevice &vdev) {
 
 flatbuffers::Offset<FBCudaApiCall>
 CudaMemcpyD2H::fbSerialize(flatbuffers::FlatBufferBuilder &builder) {
+    auto s = std::chrono::high_resolution_clock::now();
     auto api_call =
         CreateFBCudaMemcpyD2H(builder, reinterpret_cast<uint64_t>(this->dst),
                               reinterpret_cast<uint64_t>(this->src), this->size,
                               builder.CreateVector(this->buffer));
+                              //builder.CreateString(this->buffer.data(), this->buffer.size()));
+    auto e = std::chrono::high_resolution_clock::now();
+    auto d =
+        std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
+        1000000.0;
+    std::cerr << "d2h ser " << d << std::endl;
     auto api_call_union = CreateFBCudaApiCall(
         builder, FBCudaApiCallUnion_FBCudaMemcpyD2H, api_call.Union());
     return api_call_union;
@@ -291,6 +317,7 @@ uint64_t CudaLaunchKernel::executeNative(CudaVirtualDevice &vdev) {
     std::vector<void *> args;
     for (unsigned i = 0; i < paramBuffers.size(); i++) {
         auto &b = this->paramBuffers[i];
+
         args.push_back(b.data());
     }
 

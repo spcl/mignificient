@@ -16,6 +16,7 @@
 #include "libgpuless.hpp"
 #include "trace_executor_local.hpp"
 #include "trace_executor_tcp_client.hpp"
+#include "trace_executor_shmem_client.hpp"
 
 using namespace gpuless;
 
@@ -26,6 +27,7 @@ short manager_port = 8002;
 const char *manager_ip = "127.0.0.1";
 
 static bool useTcp = true;
+static bool useShmem = true;
 static void exitHandler();
 
 static void hijackInit() {
@@ -80,9 +82,15 @@ static std::map<uint64_t,
                 std::chrono::time_point<std::chrono::high_resolution_clock>>
     event_times;
 
-std::shared_ptr<TraceExecutor> getTraceExecutor() {
+std::shared_ptr<TraceExecutor> getTraceExecutor(bool clean) {
     static std::shared_ptr<TraceExecutor> trace_executor;
     static bool te_initialized = false;
+
+    if(clean) {
+      trace_executor.reset();
+      return nullptr;
+    }
+
     if (!te_initialized) {
 
         // register the exit handler here, so that the static trace_executor
@@ -96,12 +104,18 @@ std::shared_ptr<TraceExecutor> getTraceExecutor() {
             std::string executor_type_str(executor_type);
             if (executor_type_str == "tcp") {
                 useTcp = true;
+                useShmem = false;
+            } else if (executor_type_str == "shmem") {
+                useShmem = true;
+                useTcp = false;
             } else {
+                useShmem = false;
                 useTcp = false;
             }
         }
 
         if (useTcp) {
+
             trace_executor = std::make_shared<TraceExecutorTcp>();
             bool r = trace_executor->init(manager_ip, manager_port,
                                           manager::instance_profile::NO_MIG);
@@ -109,6 +123,14 @@ std::shared_ptr<TraceExecutor> getTraceExecutor() {
                 SPDLOG_ERROR("Failed to initialize TCP trace executor");
                 std::exit(EXIT_FAILURE);
             }
+
+        } else if (useShmem){
+
+            TraceExecutorShmem::init_runtime();
+            trace_executor = std::make_shared<TraceExecutorShmem>();
+            bool r = trace_executor->init(manager_ip, manager_port,
+                                          manager::instance_profile::NO_MIG);
+
         } else {
             trace_executor = std::make_shared<TraceExecutorLocal>();
         }
@@ -162,6 +184,7 @@ static void exitHandler() {
             SPDLOG_INFO("Deallocated session");
         }
     }
+    getTraceExecutor(true);
 }
 
 extern "C" {
