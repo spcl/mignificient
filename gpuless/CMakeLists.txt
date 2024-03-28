@@ -86,6 +86,7 @@ target_link_libraries(manager_trace
     pthread
     spdlog::spdlog
     flatbuffers
+    iceoryx_posh::iceoryx_posh
 )
 
 add_library(analysis SHARED
@@ -134,6 +135,7 @@ target_link_libraries(gpuless
     CUDA::cudart
     CUDA::cublas
     flatbuffers
+    iceoryx_posh::iceoryx_posh
 )
 
 add_custom_command(
