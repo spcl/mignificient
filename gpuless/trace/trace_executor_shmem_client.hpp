@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <queue>
 
+#include "iceoryx_posh/popo/wait_set.hpp"
 #include "trace_executor.hpp"
 
 #include <iceoryx_posh/internal/runtime/posh_runtime_impl.hpp>
@@ -127,6 +128,9 @@ class TraceExecutorShmem : public TraceExecutor {
     // Not great - internal feature - but we don't have a better solution.
     std::unique_ptr<iox::runtime::PoshRuntimeImpl> _impl;
     std::unique_ptr<iox::popo::UntypedClient> client;
+    std::optional<iox::popo::WaitSet<>> waitset;
+
+    bool wait_poll;
 
   private:
     bool negotiateSession(manager::instance_profile profile);

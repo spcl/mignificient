@@ -16,11 +16,14 @@ struct ShmemServer {
 
   void setup(const std::string app_name);
   void loop();
+  void loop_wait();
   void finish();
 
   void* take();
   void release(void*);
 
+  void _process_client(const void* payload);
+  double _sum = 0;
 };
 
 #endif // __MANAGER_DEVICE_HPP__

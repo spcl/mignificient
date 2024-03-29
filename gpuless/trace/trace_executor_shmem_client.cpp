@@ -38,6 +38,16 @@ TraceExecutorShmem::TraceExecutorShmem()
 
     // FIXME: Parameter
     client.reset(new iox::popo::UntypedClient({"Example", "Request-Response", "Add"}));
+
+    waitset.emplace();
+    wait_poll = std::string_view{std::getenv("POLL_TYPE")} == "WAIT";
+
+    if(wait_poll) {
+      waitset.value().attachState(*client, iox::popo::ClientState::HAS_RESPONSE).or_else([](auto) {
+          std::cerr << "failed to attach server" << std::endl;
+          std::exit(EXIT_FAILURE);
+      });
+    }
 }
 
 TraceExecutorShmem::~TraceExecutorShmem() = default;
@@ -157,6 +167,7 @@ bool TraceExecutorShmem::deallocate() {
 bool TraceExecutorShmem::synchronize(CudaTrace &cuda_trace) {
     auto s = std::chrono::high_resolution_clock::now();
 
+
     this->synchronize_counter_++;
     SPDLOG_INFO(
         "TraceExecutorTcp::synchronize() [synchronize_counter={}, size={}]",
@@ -203,25 +214,11 @@ bool TraceExecutorShmem::synchronize(CudaTrace &cuda_trace) {
 
       if(auto* ptr = dynamic_cast<CudaMemcpyH2D*>(call.get())) {
         _pool.give(ptr->shared_name);
-      
       }
 
     }
 
-    // FIXME: waitset
-    while(true) {
-
-      auto val = client->take();
-
-      if(val.has_error()) {
-
-        if(val.get_error() == iox::popo::ChunkReceiveResult::NO_CHUNK_AVAILABLE) {
-          continue;
-        } else {
-          abort();
-        }
-
-      } else {
+    auto process = [&](iox::cxx::expected<const void*, iox::popo::ChunkReceiveResult> val) {
 
         auto responsePayload = val.value();
         auto responseHeader = iox::popo::ResponseHeader::fromPayload(responsePayload);
@@ -248,7 +245,44 @@ bool TraceExecutorShmem::synchronize(CudaTrace &cuda_trace) {
             std::cout << "Got Response with outdated sequence ID! Expected = " << expectedResponseSequenceId
                       << "; Actual = " << responseHeader->getSequenceId() << "! -> skip" << std::endl;
         }
-        break;
+    };
+
+    if(wait_poll) {
+
+        auto notificationVector = waitset.value().wait();
+
+        for (auto& notification : notificationVector)
+        {
+
+            if(notification->doesOriginateFrom(client.get())) {
+
+              auto val = client->take();
+              process(val);
+
+            }
+
+        }
+
+    } else {
+
+      while(true) {
+
+        auto val = client->take();
+
+        if(val.has_error()) {
+
+          if(val.get_error() == iox::popo::ChunkReceiveResult::NO_CHUNK_AVAILABLE) {
+            continue;
+          } else {
+            abort();
+          }
+
+        } else {
+
+          process(val);
+          break;
+
+        }
 
       }
 

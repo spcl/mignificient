@@ -17,6 +17,7 @@
 #include "../../utils.hpp"
 #include "../cuda_trace.hpp"
 #include "../cuda_trace_converter.hpp"
+#include "iceoryx_posh/popo/wait_set.hpp"
 #include "manager_device.hpp"
 
 #include "../trace_executor_shmem_client.hpp"
@@ -182,6 +183,89 @@ void ShmemServer::release(void* ptr)
     this->server->releaseRequest(ptr);
 }
 
+void ShmemServer::_process_client(const void* requestPayload)
+{
+    //auto request = static_cast<const AddRequest*>(requestPayload);
+    //std::cout << APP_NAME << " Got Request: " << request->augend << " + " << request->addend << std::endl;
+
+    auto s = std::chrono::high_resolution_clock::now();
+    //handle_request(s_new);
+    auto msg = gpuless::GetFBProtocolMessage(requestPayload);
+    flatbuffers::FlatBufferBuilder builder;
+    auto e1 = std::chrono::high_resolution_clock::now();
+
+    //std::cerr << "Request" << std::endl;
+
+    if (msg->message_type() == gpuless::FBMessage_FBTraceExecRequest) {
+        builder = handle_execute_request(msg, -1);
+    } else if (msg->message_type() == gpuless::FBMessage_FBTraceAttributeRequest) {
+        builder = handle_attributes_request(msg, -1);
+    } else {
+        SPDLOG_ERROR("Invalid request type");
+        return;
+    }
+    auto e = std::chrono::high_resolution_clock::now();
+    auto d =
+        std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
+        1000000.0;
+    auto d1 =
+        std::chrono::duration_cast<std::chrono::microseconds>(e1 - s).count() /
+        1000000.0;
+    _sum += d;
+    std::cerr << "replied " << d << " , " << d1 << " , total " << _sum << std::endl;
+
+    ////! [send response]
+    auto requestHeader = iox::popo::RequestHeader::fromPayload(requestPayload);
+    server->loan(requestHeader, sizeof(builder.GetSize()), alignof(1))
+        .and_then([&](auto& responsePayload) {
+
+            memcpy(responsePayload, builder.GetBufferPointer(), builder.GetSize());
+            //auto response = static_cast<AddResponse*>(responsePayload);
+            //response->sum = request->augend + request->addend;
+            //std::cout << APP_NAME << " Send Response: " << response->sum << std::endl;
+            server->send(responsePayload).or_else(
+                [&](auto& error) { std::cout << "Could not send Response! Error: " << error << std::endl; });
+        })
+        .or_else(
+            [&](auto& error) { std::cout << "Could not allocate Response! Error: " << error << std::endl; });
+    //! [send response]
+
+    server->releaseRequest(requestPayload);
+
+}
+
+void ShmemServer::loop_wait()
+{
+    server.reset(new iox::popo::UntypedServer({"Example", "Request-Response", "Add"}));
+
+    iox::popo::WaitSet<> waitset;
+
+    waitset.attachState(*server, iox::popo::ServerState::HAS_REQUEST).or_else([](auto) {
+        std::cerr << "failed to attach server" << std::endl;
+        std::exit(EXIT_FAILURE);
+    });
+
+    // TODO: subscriber for master
+
+    while (!iox::posix::hasTerminationRequested())
+    {
+        auto notificationVector = waitset.wait();
+
+        for (auto& notification : notificationVector)
+        {
+            if(notification->doesOriginateFrom(server.get())) {
+
+                //! [take request]
+                server->take().and_then([&](auto& requestPayload) {
+                    _process_client(requestPayload);
+                });
+
+            }
+        }
+
+    }
+}
+
 void ShmemServer::loop()
 {
     server.reset(new iox::popo::UntypedServer({"Example", "Request-Response", "Add"}));
@@ -191,59 +275,10 @@ void ShmemServer::loop()
     {
         //! [take request]
         server->take().and_then([&](auto& requestPayload) {
-
-            //auto request = static_cast<const AddRequest*>(requestPayload);
-            //std::cout << APP_NAME << " Got Request: " << request->augend << " + " << request->addend << std::endl;
-
-            auto s = std::chrono::high_resolution_clock::now();
-            //handle_request(s_new);
-            auto msg = gpuless::GetFBProtocolMessage(requestPayload);
-            flatbuffers::FlatBufferBuilder builder;
-            auto e1 = std::chrono::high_resolution_clock::now();
-
-            //std::cerr << "Request" << std::endl;
-
-            if (msg->message_type() == gpuless::FBMessage_FBTraceExecRequest) {
-                builder = handle_execute_request(msg, -1);
-            } else if (msg->message_type() == gpuless::FBMessage_FBTraceAttributeRequest) {
-                builder = handle_attributes_request(msg, -1);
-            } else {
-                SPDLOG_ERROR("Invalid request type");
-                return;
-            }
-            auto e = std::chrono::high_resolution_clock::now();
-            auto d =
-                std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
-                1000000.0;
-            auto d1 =
-                std::chrono::duration_cast<std::chrono::microseconds>(e1 - s).count() /
-                1000000.0;
-            sum += d;
-            std::cerr << "replied " << d << " , " << d1 << " , total " << sum << std::endl;
-
-            ////! [send response]
-            auto requestHeader = iox::popo::RequestHeader::fromPayload(requestPayload);
-            server->loan(requestHeader, sizeof(builder.GetSize()), alignof(1))
-                .and_then([&](auto& responsePayload) {
-
-                    
-                    memcpy(responsePayload, builder.GetBufferPointer(), builder.GetSize());
-                    //auto response = static_cast<AddResponse*>(responsePayload);
-                    //response->sum = request->augend + request->addend;
-                    //std::cout << APP_NAME << " Send Response: " << response->sum << std::endl;
-                    server->send(responsePayload).or_else(
-                        [&](auto& error) { std::cout << "Could not send Response! Error: " << error << std::endl; });
-                })
-                .or_else(
-                    [&](auto& error) { std::cout << "Could not allocate Response! Error: " << error << std::endl; });
-            //! [send response]
-
-            server->releaseRequest(requestPayload);
+            _process_client(requestPayload);
         });
         //! [take request]
 
-        //constexpr std::chrono::milliseconds SLEEP_TIME{100U};
-        //std::this_thread::sleep_for(SLEEP_TIME);
     }
 }
 
@@ -251,6 +286,7 @@ void manage_device(const std::string& device, uint16_t port) {
     setenv("CUDA_VISIBLE_DEVICES", device.c_str(), 1);
 
     const char* manager_type = std::getenv("MANAGER_TYPE");
+    const char* poll_type = std::getenv("POLL_TYPE");
 
     if(std::string_view{manager_type} == "tcp") {
 
@@ -303,7 +339,11 @@ void manage_device(const std::string& device, uint16_t port) {
       // initialize cuda device pre-emptively
       getCudaVirtualDevice().initRealDevice();
 
-      shm_server.loop();
+      if(std::string_view{poll_type} == "WAIT") {
+        shm_server.loop_wait();
+      } else {
+        shm_server.loop();
+      }
     }
 
     exit(EXIT_SUCCESS);
