@@ -12,3 +12,21 @@ index 4c135e52e..4ad2c3e94 100644
      friend class PoshRuntime;
      friend class roudi::RuntimeTestInterface;
  
+diff --git a/iceoryx_posh/include/iceoryx_posh/runtime/posh_runtime.hpp b/iceoryx_posh/include/iceoryx_posh/runtime/posh_runtime.hpp
+index 20224070e..a6fe79e85 100644
+--- a/iceoryx_posh/include/iceoryx_posh/runtime/posh_runtime.hpp
++++ b/iceoryx_posh/include/iceoryx_posh/runtime/posh_runtime.hpp
+@@ -159,11 +159,13 @@ class PoshRuntime
+     /// @return current runtime factory
+     static factory_t& getRuntimeFactory() noexcept;
+ 
++  public:
+     /// @brief sets runtime factory, terminates if given factory is empty
+     ///
+     /// @param[in] factory std::function to which the runtime factory should be set
+     static void setRuntimeFactory(const factory_t& factory) noexcept;
+ 
++  protected:
+     /// @brief creates the runtime or returns the already existing one -> Singleton
+     ///
+     /// @param[in] name optional containing the name used for registering with the RouDi daemon
