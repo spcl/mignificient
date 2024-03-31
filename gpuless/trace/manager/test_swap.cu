@@ -1,6 +1,5 @@
 #include <iostream>
 #include <vector>
-#include <algorithm>
 #include <cuda_runtime_api.h>
 // #include "manager_device.h"
 
