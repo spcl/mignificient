@@ -4,6 +4,8 @@ project(gpuless)
 enable_language(CUDA)
 find_package(CUDAToolkit 11.4)
 
+set(CUDNN_DIR "" CACHE STRING "")
+
 option(BUILD_BENCHMARKS "Build the resnet50 benchmark" OFF)
 
 option(SPDLOG_LEVEL_INFO "Set the spdlog level to info" OFF)
@@ -35,12 +37,16 @@ link_directories(${CMAKE_SOURCE_DIR}/lib)
 cmake_host_system_information(RESULT _hostname QUERY HOSTNAME)
 if (${_hostname} MATCHES ".*\.cscs\.ch")
     add_compile_options(-DCSCS)
-    include_directories($ENV{HOME}/cudnn/include)
-    link_directories($ENV{HOME}/cudnn/lib64)
+    #include_directories($ENV{HOME}/cudnn/include)
+    #link_directories($ENV{HOME}/cudnn/lib64)
+    include_directories(${CUDNN_DIR}/include)
+    link_directories(${CUDNN_DIR}/lib64)
+    link_directories(${CUDNN_DIR}/lib)
+else()
+  # FIXME: is there a better solution?
+  # fix for missing link `-lcudnn`
+  link_directories(gpuless PUBLIC ${CUDAToolkit_LIBRARY_DIR})
 endif()
-# FIXME: is there a better solution?
-# fix for missing link `-lcudnn`
-link_directories(gpuless PUBLIC ${CUDAToolkit_LIBRARY_DIR})
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 17)

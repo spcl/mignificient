@@ -1,5 +1,6 @@
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_STANDARD 17)
 
 add_library(executor_lib SHARED
   executor.cpp
@@ -20,6 +21,7 @@ add_executable(executor_cpp
 target_include_directories(executor_cpp SYSTEM PRIVATE $<TARGET_PROPERTY:spdlog::spdlog,INTERFACE_INCLUDE_DIRECTORIES>)
 add_dependencies(executor_cpp spdlog)
 target_link_libraries(executor_cpp
+  dl
   executor_lib
   spdlog::spdlog
 )
