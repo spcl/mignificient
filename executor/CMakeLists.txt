@@ -3,6 +3,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_library(executor_lib SHARED
   executor.cpp
+  function.cpp
 )
 target_include_directories(executor_lib SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(executor_lib SYSTEM PRIVATE $<TARGET_PROPERTY:spdlog::spdlog,INTERFACE_INCLUDE_DIRECTORIES>)
@@ -11,6 +12,7 @@ target_link_libraries(executor_lib
   spdlog::spdlog
   iceoryx_posh::iceoryx_posh
 )
+set_target_properties(executor_lib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_executable(executor_cpp
   executor_cpp.cpp

@@ -1,12 +1,14 @@
 
-#include "iceoryx_posh/mepoo/chunk_header.hpp"
 #include <string>
 #include <optional>
 
+#include <iceoryx_posh/mepoo/chunk_header.hpp>
 #include <iceoryx_posh/popo/subscriber.hpp>
 #include <iceoryx_posh/popo/untyped_subscriber.hpp>
 #include <iceoryx_posh/popo/publisher.hpp>
 #include <iceoryx_hoofs/posix_wrapper/signal_handler.hpp>
+
+#include "function.hpp"
 
 namespace mignificient { namespace executor {
 
@@ -29,17 +31,6 @@ namespace mignificient { namespace executor {
     iox::cxx::vector<uint8_t, CAPACITY> data;
     size_t size;
     Message msg;
-  };
-
-  struct InvocationData {
-    const uint8_t* data;
-    size_t size;
-  };
-
-  struct InvocationResultData {
-    uint8_t* data;
-    size_t size;
-    size_t capacity;
   };
 
   struct Runtime {
@@ -72,4 +63,6 @@ namespace mignificient { namespace executor {
     static void _sigHandler(int sig);
   };
 
-}}
+}
+
+}
