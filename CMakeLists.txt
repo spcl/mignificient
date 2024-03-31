@@ -30,3 +30,4 @@ add_subdirectory(gpuless)
 
 add_subdirectory(executor)
 
+add_subdirectory(orchestrator)

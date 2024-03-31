@@ -1,4 +1,5 @@
 
+#include <spdlog/spdlog.h>
 #include <string>
 
 #include "executor.hpp"
@@ -20,7 +21,9 @@ int main(int argc, char **argv) {
       break;
     }
 
-    std::cerr << "invoke with payload size " << invocation_data.size << std::endl;
+    spdlog::info("Invoke, data size {}, first element {}", invocation_data.size, invocation_data.data[0]);
+
+    runtime.finish();
 
   }
 

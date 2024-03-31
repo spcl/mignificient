@@ -10,11 +10,10 @@
 namespace mignificient { namespace executor {
 
   struct Invocation {
-
-    iox::cxx::vector<uint8_t, 5 * 1024 * 1024> data;
-
+    static constexpr int CAPACITY = 5 * 1024 * 1024;
+    iox::cxx::vector<uint8_t, CAPACITY> data;
+    size_t size;
     iox::cxx::string<64> id;
-
   };
 
   enum class Message {

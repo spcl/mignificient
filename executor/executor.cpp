@@ -22,9 +22,7 @@ namespace mignificient { namespace executor {
   Runtime::Runtime(const std::string& name):
     last_message(nullptr)
   {
-    // FIXME: Name
-    constexpr char APP_NAME[] = "gpuless";
-    iox::runtime::PoshRuntime::initRuntime(APP_NAME);
+    iox::runtime::PoshRuntime::initRuntime(iox::RuntimeName_t{iox::cxx::TruncateToCapacity_t{}, name});
 
     client.emplace(iox::capro::ServiceDescription{iox::RuntimeName_t{iox::cxx::TruncateToCapacity_t{}, name}, "Orchestrator", "Send"});
     orchestrator.emplace(iox::capro::ServiceDescription{iox::RuntimeName_t{iox::cxx::TruncateToCapacity_t{}, name}, "Orchestrator", "Receive"});
@@ -77,7 +75,7 @@ namespace mignificient { namespace executor {
 
           last_message = value.value();
           auto* ptr = static_cast<const Invocation*>(last_message);
-          return InvocationData{ptr->data.data(), ptr->data.size()};
+          return InvocationData{ptr->data.data(), ptr->size};
         }
       }
     }
