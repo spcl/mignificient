@@ -21,3 +21,24 @@ target_link_libraries(executor_cpp
   executor_lib
   spdlog::spdlog
 )
+
+find_package(Python COMPONENTS Interpreter Development)
+find_package(pybind11 CONFIG)
+
+message(${Python_FOUND})
+message(${pybind11_FOUND})
+
+if(Python_FOUND AND pybind11_FOUND)
+
+    message(STATUS "Building Python executor.")
+
+    add_compile_definitions(WITH_PYTHON)
+    pybind11_add_module(_mignificient python/executor.cpp)
+    target_link_libraries(_mignificient PRIVATE executor_lib)
+
+    set_target_properties(_mignificient PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/mignificient)
+
+    configure_file(python/__init__.py ${CMAKE_CURRENT_BINARY_DIR}/mignificient/__init__.py COPYONLY)
+
+    configure_file(python/cli.py ${CMAKE_CURRENT_BINARY_DIR}/bin/executor_python.py COPYONLY)
+endif()
