@@ -23,6 +23,12 @@ int main(int argc, char **argv) {
 
     spdlog::info("Invoke, data size {}, first element {}", invocation_data.size, invocation_data.data[0]);
 
+    runtime.result().size = 10;
+    std::string_view res{"{ \"test\": 42 }"};
+
+    std::copy_n(res.data(), res.length(), reinterpret_cast<char*>(runtime.result().data.data()));
+    runtime.result().size = res.length();
+
     runtime.finish();
 
   }

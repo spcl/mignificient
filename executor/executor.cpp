@@ -41,14 +41,10 @@ namespace mignificient { namespace executor {
 
   void Runtime::gpu_yield()
   {
-    client.value().loan()
-      .and_then([](auto & msg) {
-        *msg = Message::YIELD;
-        msg.publish();
-      })
-      .or_else([](auto & error) {
-        std::cout << "yield error " << static_cast<uint64_t>(error) << std::endl;
-      });
+    _result.value()->msg = Message::YIELD;
+    _result->publish();
+
+    _result = std::move(client.value().loan().value());
   }
 
   InvocationData Runtime::loop_wait()
@@ -75,6 +71,9 @@ namespace mignificient { namespace executor {
 
           last_message = value.value();
           auto* ptr = static_cast<const Invocation*>(last_message);
+
+          _result = std::move(client.value().loan().value());
+
           return InvocationData{ptr->data.data(), ptr->size};
         }
       }
@@ -85,14 +84,15 @@ namespace mignificient { namespace executor {
 
   void Runtime::finish()
   {
-    client.value().loan()
-      .and_then([](auto & msg) {
-        *msg = Message::FINISH;
-        msg.publish();
-      })
-      .or_else([](auto & error) {
-        std::cout << "yield error " << static_cast<uint64_t>(error) << std::endl;
-      });
+    _result.value()->msg = Message::FINISH;
+    _result->publish();
+
+    _result = std::move(client.value().loan().value());
+  }
+
+  InvocationResult& Runtime::result()
+  {
+    return *_result->get();
   }
 
 }}

@@ -1,4 +1,5 @@
 
+#include "iceoryx_posh/mepoo/chunk_header.hpp"
 #include <string>
 #include <optional>
 
@@ -18,10 +19,16 @@ namespace mignificient { namespace executor {
 
   enum class Message {
 
-    INVOKE = 0,
-    YIELD = 1,
-    FINISH = 2
+    YIELD = 0,
+    FINISH = 1
 
+  };
+
+  struct InvocationResult {
+    static constexpr int CAPACITY = 5 * 1024 * 1024;
+    iox::cxx::vector<uint8_t, CAPACITY> data;
+    size_t size;
+    Message msg;
   };
 
   struct InvocationData {
@@ -39,13 +46,17 @@ namespace mignificient { namespace executor {
 
     void finish();
 
+    InvocationResult& result();
+
   private:
-    std::optional<iox::popo::Publisher<Message>> client;
+    std::optional<iox::popo::Publisher<InvocationResult>> client;
     std::optional<iox::popo::UntypedSubscriber> orchestrator;
     std::optional<iox::popo::WaitSet<>> waitset;
 
     std::optional<iox::posix::SignalGuard> sigint;
     std::optional<iox::posix::SignalGuard> sigterm;
+
+    std::optional<iox::popo::Sample<InvocationResult, iox::mepoo::NoUserHeader>> _result;
 
     const void* last_message;
 
