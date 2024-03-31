@@ -20,7 +20,8 @@ void define_mignificient_runtime(py::module& m)
       .def(py::init<const std::string&>())
       .def("loop_wait", &mignificient::executor::Runtime::loop_wait)
       .def("gpu_yield", &mignificient::executor::Runtime::gpu_yield)
-      .def("finish", &mignificient::executor::Runtime::finish);
+      .def("finish", &mignificient::executor::Runtime::finish)
+      .def("result", &mignificient::executor::Runtime::result);
 
   py::class_<mignificient::executor::InvocationData>(m, "Buffer")
       .def(py::init())
@@ -29,9 +30,22 @@ void define_mignificient_runtime(py::module& m)
       .def(
           "view_readable",
           [](mignificient::executor::InvocationData& self) {
-            return py::memoryview::from_memory(self.data, sizeof(std::byte) * self.size);
+            return py::memoryview::from_memory(self.data, sizeof(std::byte) * mignificient::executor::Invocation::CAPACITY);
           }
       );
+
+  py::class_<mignificient::executor::InvocationResultData>(m, "Result")
+      .def(py::init())
+      .def_readonly("data", &mignificient::executor::InvocationResultData::data)
+      .def_readwrite("size", &mignificient::executor::InvocationResultData::size)
+      .def("view_readable",
+          [](mignificient::executor::InvocationResultData& self) {
+            return py::memoryview::from_memory(self.data, sizeof(std::byte) * mignificient::executor::InvocationResult::CAPACITY);
+          }
+      )
+      .def("view_writable", [](mignificient::executor::InvocationResultData& self) {
+        return py::memoryview::from_memory(self.data, sizeof(std::byte) * mignificient::executor::InvocationResult::CAPACITY);
+      });
 }
 
 PYBIND11_MODULE(_mignificient, m)

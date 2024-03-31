@@ -21,6 +21,7 @@ target_link_libraries(executor_cpp
   executor_lib
   spdlog::spdlog
 )
+set_target_properties(executor_cpp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin/)
 
 find_package(Python COMPONENTS Interpreter Development)
 find_package(pybind11 CONFIG)

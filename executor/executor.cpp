@@ -73,6 +73,8 @@ namespace mignificient { namespace executor {
           auto* ptr = static_cast<const Invocation*>(last_message);
 
           _result = std::move(client.value().loan().value());
+          _result.value()->size = 0;
+          _result.value()->data.resize(InvocationResult::CAPACITY);
 
           return InvocationData{ptr->data.data(), ptr->size};
         }
@@ -82,17 +84,18 @@ namespace mignificient { namespace executor {
     return InvocationData{nullptr, 0};
   }
 
-  void Runtime::finish()
+  void Runtime::finish(int size)
   {
+    _result.value()->size = size;
     _result.value()->msg = Message::FINISH;
     _result->publish();
 
     _result = std::move(client.value().loan().value());
   }
 
-  InvocationResult& Runtime::result()
+  InvocationResultData Runtime::result()
   {
-    return *_result->get();
+    return InvocationResultData{_result.value()->data.data(), _result.value()->size, InvocationResult::CAPACITY};
   }
 
 }}

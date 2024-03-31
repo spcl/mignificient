@@ -36,6 +36,12 @@ namespace mignificient { namespace executor {
     size_t size;
   };
 
+  struct InvocationResultData {
+    uint8_t* data;
+    size_t size;
+    size_t capacity;
+  };
+
   struct Runtime {
 
     Runtime(const std::string& name);
@@ -44,11 +50,12 @@ namespace mignificient { namespace executor {
 
     void gpu_yield();
 
-    void finish();
+    void finish(int size);
 
-    InvocationResult& result();
+    InvocationResultData result();
 
   private:
+
     std::optional<iox::popo::Publisher<InvocationResult>> client;
     std::optional<iox::popo::UntypedSubscriber> orchestrator;
     std::optional<iox::popo::WaitSet<>> waitset;

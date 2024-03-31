@@ -31,7 +31,7 @@ namespace mignificient { namespace orchestrator {
   struct Client {
     std::string id;
     iox::popo::UntypedPublisher send;
-    iox::popo::Subscriber<mignificient::executor::Message> recv;
+    iox::popo::Subscriber<mignificient::executor::InvocationResult> recv;
     void* payload;
 
     Client(const std::string& name):
@@ -67,7 +67,6 @@ namespace mignificient { namespace orchestrator {
     void send_request()
     {
       //std::cerr << "Publish " << name << " " << std::endl;
-      spdlog::info("{} {} {} ", static_cast<executor::Invocation*>(payload)->size, static_cast<executor::Invocation*>(payload)->data[0], fmt::ptr(payload));
       send.publish(payload);
       payload = send.loan(sizeof(executor::Invocation), alignof(executor::Invocation)).value();
     }
@@ -118,9 +117,13 @@ namespace mignificient { namespace orchestrator {
 
         for (auto& notification : notificationVector)
         {
-          std::cerr << "result" << notification->getNotificationId() << std::endl;
           auto res = client(notification->getNotificationId())->recv.take();
-          std::cerr << (*res.value().get() == executor::Message::FINISH) << std::endl;
+
+          if(res.value().get()->msg == executor::Message::FINISH) {
+            spdlog::info("Finish {}", std::string_view{reinterpret_cast<const char*>(res.value().get()->data.data()), res.value().get()->size});
+          } else {
+            spdlog::info("Yield {}");
+          }
           //notification->getOrigin<typename T>()
           //auto value = orchestrator.value().take();
 
@@ -167,9 +170,10 @@ int main(int argc, char ** argv)
 
   auto& client = *orchestrator.client(0);
   client.request().id = "test";
-  client.request().data[0] = 42;
-  spdlog::info(fmt::ptr(client.request().data.data()));
-  client.request().size = 1;
+  client.request().data.resize(4);
+  int val = 42;
+  memcpy(client.request().data.data(), &val, sizeof(int));
+  client.request().size = 4;
   client.send_request();
 
   orchestrator.wait();
