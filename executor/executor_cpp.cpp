@@ -42,6 +42,8 @@ int main(int argc, char **argv) {
 
     size_t size = func({runtime, std::move(invocation_data), runtime.result()});
 
+    runtime.gpu_yield();
+
     //runtime.result().size = 10;
     std::string_view res{"{ \"test\": 42 }"};
 
