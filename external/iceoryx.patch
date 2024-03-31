@@ -1,0 +1,14 @@
+diff --git a/iceoryx_posh/include/iceoryx_posh/internal/runtime/posh_runtime_impl.hpp b/iceoryx_posh/include/iceoryx_posh/internal/runtime/posh_runtime_impl.hpp
+index 4c135e52e..4ad2c3e94 100644
+--- a/iceoryx_posh/include/iceoryx_posh/internal/runtime/posh_runtime_impl.hpp
++++ b/iceoryx_posh/include/iceoryx_posh/internal/runtime/posh_runtime_impl.hpp
+@@ -80,7 +80,8 @@ class PoshRuntimeImpl : public PoshRuntime
+     /// @copydoc PoshRuntime::sendRequestToRouDi
+     bool sendRequestToRouDi(const IpcMessage& msg, IpcMessage& answer) noexcept override;
+ 
+-  protected:
++  //protected:
++  public:
+     friend class PoshRuntime;
+     friend class roudi::RuntimeTestInterface;
+ 
