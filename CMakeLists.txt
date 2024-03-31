@@ -2,9 +2,6 @@ cmake_minimum_required(VERSION 3.17)
 include(FetchContent)
 project(mignificient)
 
-add_subdirectory(gpuless)
-
-
 set(EXTERNAL_INSTALL_LOCATION ${CMAKE_BINARY_DIR}/external)
 
 find_package(spdlog 1.8...<1.10 QUIET)
@@ -28,3 +25,8 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/external/flatbuffers
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/external/iceoryx/iceoryx_meta
                  ${EXTERNAL_INSTALL_LOCATION}/iceoryx-build)
+
+add_subdirectory(gpuless)
+
+add_subdirectory(executor)
+
