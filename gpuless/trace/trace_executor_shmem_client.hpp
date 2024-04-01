@@ -21,7 +21,8 @@ struct MemChunk {
 
     void allocate()
     {
-        int fd = shm_open(name.c_str(), O_CREAT | O_EXCL | O_RDWR, 0600);
+        //int fd = shm_open(name.c_str(), O_CREAT | O_EXCL | O_RDWR, 0600);
+        int fd = shm_open(name.c_str(), O_CREAT | O_RDWR, 0600);
         std::cerr << fd << " " << errno << std::endl;
         int ret  = ftruncate(fd, CHUNK_SIZE);
         std::cerr << fd << " " << ret << " " << errno << std::endl;
@@ -62,7 +63,7 @@ public:
         used_chunks[name] = ptr;
         return ptr;
       } else {
-        std::cerr << "return " << name << " " << (*it).second << std::endl;
+        //std::cerr << "return " << name << " " << (*it).second << std::endl;
         return (*it).second;
       }
     }
@@ -81,7 +82,7 @@ public:
 
     void give(const std::string& name)
     {
-      std::cerr << "Return " << name << std::endl;
+      //std::cerr << "Return " << name << std::endl;
       chunks.push(MemChunk{used_chunks[name], name});
     }
 
