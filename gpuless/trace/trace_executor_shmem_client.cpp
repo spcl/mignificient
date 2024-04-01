@@ -29,12 +29,12 @@ iox::runtime::PoshRuntime& runtime_factory(iox::cxx::optional<const iox::Runtime
 
 TraceExecutorShmem::TraceExecutorShmem()
 {
-    iox::runtime::PoshRuntime::setRuntimeFactory(runtime_factory);
-    runtime_factory_impl(nullptr, this);
+    //iox::runtime::PoshRuntime::setRuntimeFactory(runtime_factory);
+    //runtime_factory_impl(nullptr, this);
 
-    // FIXME: Parameter
-    constexpr char APP_NAME[] = "gpuless-app2";
-    iox::runtime::PoshRuntime::initRuntime(APP_NAME);
+    //// FIXME: Parameter
+    //constexpr char APP_NAME[] = "gpuless-app2";
+    //iox::runtime::PoshRuntime::initRuntime(APP_NAME);
 
     // FIXME: Parameter
     client.reset(new iox::popo::UntypedClient({"Example", "Request-Response", "Add"}));
@@ -232,11 +232,11 @@ bool TraceExecutorShmem::synchronize(CudaTrace &cuda_trace) {
                 fb_protocol_message_response->message_as_FBTraceExecResponse();
             cuda_api_call =
                 CudaTraceConverter::execResponseToTopApiCall(fb_trace_exec_response);
-            auto e1 = std::chrono::high_resolution_clock::now();
-            auto d1 =
-                std::chrono::duration_cast<std::chrono::microseconds>(e1 - s1).count() /
-                1000000.0;
-            std::cerr << d1 << std::endl;
+            //auto e1 = std::chrono::high_resolution_clock::now();
+            //auto d1 =
+            //    std::chrono::duration_cast<std::chrono::microseconds>(e1 - s1).count() /
+            //    1000000.0;
+            //std::cerr << d1 << std::endl;
             //this->synchronize_total_time_2 += d1;
             client->releaseResponse(responsePayload);
         }
