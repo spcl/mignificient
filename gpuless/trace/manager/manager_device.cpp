@@ -147,10 +147,10 @@ flatbuffers::FlatBufferBuilder handle_execute_request(const gpuless::FBProtocolM
         }
         // if cudaMalloc & cudaFree executes correctly, add then to mem list
         if (apiCall->typeName() == "CudaMalloc"){
-            add_to_mem_list(apiCall-> *devPtr, apiCall->size);
+            add_to_mem_list(apiCall->*devPtr, apiCall->size);
         }
         else if (apiCall->typeName() == "CudaFree") {
-            remove_from_mem_list(apiCall-> *devPtr);
+            remove_from_mem_list(apiCall->*devPtr);
         }
     }
     auto e = std::chrono::high_resolution_clock::now();
