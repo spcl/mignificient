@@ -82,6 +82,7 @@ add_executable(manager_trace
 target_include_directories(manager_trace SYSTEM PRIVATE $<TARGET_PROPERTY:spdlog::spdlog,INTERFACE_INCLUDE_DIRECTORIES>)
 add_dependencies(manager_trace flatbuffers)
 add_dependencies(manager_trace spdlog)
+target_link_options(manager_trace PRIVATE "LINKER:-no-as-needed")
 target_link_libraries(manager_trace
     iberty
     stdc++fs
