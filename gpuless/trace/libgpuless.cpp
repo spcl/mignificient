@@ -311,7 +311,7 @@ cudaError_t cudaMemcpy(void *dst, const void *src, size_t count,
 
         if(pool) {
           auto chunk = pool->get();
-          std::cerr << "d2h " << " " << chunk.name << " " << chunk.ptr << std::endl;
+          //std::cerr << "d2h " << " " << chunk.name << " " << chunk.ptr << std::endl;
           auto rec = std::make_shared<CudaMemcpyD2H>(dst, src, count, chunk.name);
           getCudaTrace().record(rec);
           getTraceExecutor()->synchronize(getCudaTrace());

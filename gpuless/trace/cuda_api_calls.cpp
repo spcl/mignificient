@@ -58,16 +58,16 @@ CudaMemcpyH2D::CudaMemcpyH2D(void *dst, const void *src, size_t size, std::strin
 uint64_t CudaMemcpyH2D::executeNative(CudaVirtualDevice &vdev) {
     static auto real =
         (decltype(&cudaMemcpy))real_dlsym(RTLD_NEXT, "cudaMemcpy");
-    auto s = std::chrono::high_resolution_clock::now();
+    //auto s = std::chrono::high_resolution_clock::now();
     //auto val = real(this->dst, this->buffer.data(), this->size, cudaMemcpyHostToDevice);
     auto val = real(this->dst, this->buffer_ptr, this->size, cudaMemcpyHostToDevice);
     //auto val = real(this->dst, this->buffer_, this->size,
     //            cudaMemcpyHostToDevice);
-    auto e = std::chrono::high_resolution_clock::now();
-    auto d =
-        std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
-        1000000.0;
-    std::cerr << "h2d " << d << " " << size << std::endl;
+    //auto e = std::chrono::high_resolution_clock::now();
+    //auto d =
+    //    std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
+    //    1000000.0;
+    //std::cerr << "h2d " << d << " " << size << std::endl;
     return val;
 }
 
@@ -77,7 +77,7 @@ CudaMemcpyH2D::fbSerialize(flatbuffers::FlatBufferBuilder &builder) {
     auto s = std::chrono::high_resolution_clock::now();
     flatbuffers::Offset<FBCudaMemcpyH2D> api_call;
     if(!this->shared_name.empty()) {
-      std::cerr << "shmem" << std::endl;
+      //std::cerr << "shmem" << std::endl;
       api_call =
             CreateFBCudaMemcpyH2D(builder, reinterpret_cast<uint64_t>(this->dst),
                                 reinterpret_cast<uint64_t>(this->src), this->size,
@@ -93,23 +93,23 @@ CudaMemcpyH2D::fbSerialize(flatbuffers::FlatBufferBuilder &builder) {
     }
     auto api_call_union = CreateFBCudaApiCall(
         builder, FBCudaApiCallUnion_FBCudaMemcpyH2D, api_call.Union());
-    auto e = std::chrono::high_resolution_clock::now();
-    auto d =
-        std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
-        1000000.0;
+    //auto e = std::chrono::high_resolution_clock::now();
+    //auto d =
+    //    std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
+    //    1000000.0;
 
-    std::cerr << "h2d ser " << d << std::endl;
+    //std::cerr << "h2d ser " << d << std::endl;
     return api_call_union;
 }
 
 CudaMemcpyH2D::CudaMemcpyH2D(const FBCudaApiCall *fb_cuda_api_call) {
-    auto s = std::chrono::high_resolution_clock::now();
+    //auto s = std::chrono::high_resolution_clock::now();
     auto c = fb_cuda_api_call->api_call_as_FBCudaMemcpyH2D();
-    auto e = std::chrono::high_resolution_clock::now();
-    auto d =
-        std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
-        1000000.0;
-    std::cerr << "h2d deser2 " << d << std::endl;
+    //auto e = std::chrono::high_resolution_clock::now();
+    //auto d =
+    //    std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
+    //    1000000.0;
+    //std::cerr << "h2d deser2 " << d << std::endl;
     this->dst = reinterpret_cast<void *>(c->dst());
     this->src = reinterpret_cast<void *>(c->src());
     this->size = c->size();
@@ -121,17 +121,17 @@ CudaMemcpyH2D::CudaMemcpyH2D(const FBCudaApiCall *fb_cuda_api_call) {
       this->buffer_ptr = const_cast<unsigned char*>(c->buffer()->data());
     } else {
 
-      auto s = std::chrono::high_resolution_clock::now();
+      //auto s = std::chrono::high_resolution_clock::now();
       auto ptr = readers.get(c->mmap()->c_str());
       //MemChunk chunk{nullptr, c->mmap()->c_str()};
       //chunk.open();
       //this->buffer_ptr = reinterpret_cast<unsigned char*>(chunk.ptr);
       this->buffer_ptr = reinterpret_cast<unsigned char*>(ptr);
-      auto e = std::chrono::high_resolution_clock::now();
-      auto d =
-          std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
-          1000000.0;
-      std::cerr << "h2d deser2 " << d << std::endl;
+      //auto e = std::chrono::high_resolution_clock::now();
+      //auto d =
+      //    std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
+      //    1000000.0;
+      //std::cerr << "h2d deser2 " << d << std::endl;
     }
     //this->buffer = const_cast<uint8_t*>(c->buffer()->data());
     //this->buffer_ = const_cast<uint8_t*>(c->buffer()->data());
@@ -158,7 +158,7 @@ uint64_t CudaMemcpyD2H::executeNative(CudaVirtualDevice &vdev) {
 
 flatbuffers::Offset<FBCudaApiCall>
 CudaMemcpyD2H::fbSerialize(flatbuffers::FlatBufferBuilder &builder) {
-    auto s = std::chrono::high_resolution_clock::now();
+    //auto s = std::chrono::high_resolution_clock::now();
     flatbuffers::Offset<FBCudaMemcpyD2H> api_call;
 
     if(! this->shared_name.empty()) {
@@ -185,11 +185,11 @@ CudaMemcpyD2H::fbSerialize(flatbuffers::FlatBufferBuilder &builder) {
                                 builder.CreateVector(this->buffer));
                                 //builder.CreateString(this->buffer.data(), this->buffer.size()));
     }
-    auto e = std::chrono::high_resolution_clock::now();
-    auto d =
-        std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
-        1000000.0;
-    std::cerr << "d2h ser " << d << std::endl;
+    //auto e = std::chrono::high_resolution_clock::now();
+    //auto d =
+    //    std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
+    //    1000000.0;
+    //std::cerr << "d2h ser " << d << std::endl;
     auto api_call_union = CreateFBCudaApiCall(
         builder, FBCudaApiCallUnion_FBCudaMemcpyD2H, api_call.Union());
     return api_call_union;
@@ -206,14 +206,14 @@ CudaMemcpyD2H::CudaMemcpyD2H(const FBCudaApiCall *fb_cuda_api_call) {
       this->buffer_ptr = const_cast<unsigned char*>(c->buffer()->data());
     } else {
 
-      auto s = std::chrono::high_resolution_clock::now();
+      //auto s = std::chrono::high_resolution_clock::now();
       auto ptr = readers.get(c->mmap()->c_str());
       this->buffer_ptr = reinterpret_cast<unsigned char*>(ptr);
-      auto e = std::chrono::high_resolution_clock::now();
-      auto d =
-          std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
-          1000000.0;
-      std::cerr << "h2d deser2 " << d << std::endl;
+      //auto e = std::chrono::high_resolution_clock::now();
+      //auto d =
+      //    std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
+      //    1000000.0;
+      //std::cerr << "h2d deser2 " << d << std::endl;
     }
 }
 

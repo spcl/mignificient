@@ -99,22 +99,22 @@ CudaTraceConverter::fbAbstractCudaApiCallDeserialize(
         cuda_api_call = std::make_shared<CudaMalloc>(fb_cuda_api_call);
         break;
     case FBCudaApiCallUnion_FBCudaMemcpyH2D: {
-        auto s = std::chrono::high_resolution_clock::now();
+        //auto s = std::chrono::high_resolution_clock::now();
         cuda_api_call = std::make_shared<CudaMemcpyH2D>(fb_cuda_api_call);
-        auto e = std::chrono::high_resolution_clock::now();
-        auto d =
-            std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
-            1000000.0;
-        std::cerr << "h2d deser " << d << std::endl;
+        //auto e = std::chrono::high_resolution_clock::now();
+        //auto d =
+        //    std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
+        //    1000000.0;
+        //std::cerr << "h2d deser " << d << std::endl;
         break;
     } case FBCudaApiCallUnion_FBCudaMemcpyD2H: {
-        auto s = std::chrono::high_resolution_clock::now();
+        //auto s = std::chrono::high_resolution_clock::now();
         cuda_api_call = std::make_shared<CudaMemcpyD2H>(fb_cuda_api_call);
-        auto e = std::chrono::high_resolution_clock::now();
-        auto d =
-            std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
-            1000000.0;
-        std::cerr << "d2h deser " << d << std::endl;
+        //auto e = std::chrono::high_resolution_clock::now();
+        //auto d =
+        //    std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
+        //    1000000.0;
+        //std::cerr << "d2h deser " << d << std::endl;
         break;
     } case FBCudaApiCallUnion_FBCudaMemcpyD2D:
         cuda_api_call = std::make_shared<CudaMemcpyD2D>(fb_cuda_api_call);

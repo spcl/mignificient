@@ -101,11 +101,11 @@ flatbuffers::FlatBufferBuilder handle_execute_request(const gpuless::FBProtocolM
     }
 
     // execute CUDA api calls
-    auto s1 = std::chrono::high_resolution_clock::now();
+    //auto s1 = std::chrono::high_resolution_clock::now();
     auto p = msg->message_as_FBTraceExecRequest();
-    auto e2 = std::chrono::high_resolution_clock::now();
+    //auto e2 = std::chrono::high_resolution_clock::now();
     auto call_stack = gpuless::CudaTraceConverter::execRequestToTrace(p);
-    auto e3 = std::chrono::high_resolution_clock::now();
+    //auto e3 = std::chrono::high_resolution_clock::now();
     cuda_trace.setCallStack(call_stack);
     SPDLOG_INFO("Execution trace of size {}", call_stack.size());
 
@@ -119,17 +119,17 @@ flatbuffers::FlatBufferBuilder handle_execute_request(const gpuless::FBProtocolM
             std::exit(EXIT_FAILURE);
         }
     }
-    auto e = std::chrono::high_resolution_clock::now();
-    auto d =
-        std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
-        1000000.0;
-    auto d1 =
-        std::chrono::duration_cast<std::chrono::microseconds>(e2 - s1).count() /
-        1000000.0;
-    auto d2 =
-        std::chrono::duration_cast<std::chrono::microseconds>(e3 - s1).count() /
-        1000000.0;
-    std::cerr << "replied " << d << " " << d1 << " " << d2 << std::endl;
+    //auto e = std::chrono::high_resolution_clock::now();
+    //auto d =
+    //    std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
+    //    1000000.0;
+    //auto d1 =
+    //    std::chrono::duration_cast<std::chrono::microseconds>(e2 - s1).count() /
+    //    1000000.0;
+    //auto d2 =
+    //    std::chrono::duration_cast<std::chrono::microseconds>(e3 - s1).count() /
+    //    1000000.0;
+    //std::cerr << "replied " << d << " " << d1 << " " << d2 << std::endl;
 
     cuda_trace.markSynchronized();
     g_sync_counter++;
@@ -188,11 +188,11 @@ void ShmemServer::_process_client(const void* requestPayload)
     //auto request = static_cast<const AddRequest*>(requestPayload);
     //std::cout << APP_NAME << " Got Request: " << request->augend << " + " << request->addend << std::endl;
 
-    auto s = std::chrono::high_resolution_clock::now();
+    //auto s = std::chrono::high_resolution_clock::now();
     //handle_request(s_new);
     auto msg = gpuless::GetFBProtocolMessage(requestPayload);
     flatbuffers::FlatBufferBuilder builder;
-    auto e1 = std::chrono::high_resolution_clock::now();
+    //auto e1 = std::chrono::high_resolution_clock::now();
 
     //std::cerr << "Request" << std::endl;
 
@@ -204,15 +204,15 @@ void ShmemServer::_process_client(const void* requestPayload)
         SPDLOG_ERROR("Invalid request type");
         return;
     }
-    auto e = std::chrono::high_resolution_clock::now();
-    auto d =
-        std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
-        1000000.0;
-    auto d1 =
-        std::chrono::duration_cast<std::chrono::microseconds>(e1 - s).count() /
-        1000000.0;
-    _sum += d;
-    std::cerr << "replied " << d << " , " << d1 << " , total " << _sum << std::endl;
+    //auto e = std::chrono::high_resolution_clock::now();
+    //auto d =
+    //    std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
+    //    1000000.0;
+    //auto d1 =
+    //    std::chrono::duration_cast<std::chrono::microseconds>(e1 - s).count() /
+    //    1000000.0;
+    //_sum += d;
+    //std::cerr << "replied " << d << " , " << d1 << " , total " << _sum << std::endl;
 
     ////! [send response]
     auto requestHeader = iox::popo::RequestHeader::fromPayload(requestPayload);
