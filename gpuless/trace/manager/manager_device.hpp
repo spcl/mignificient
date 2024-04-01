@@ -9,6 +9,8 @@
 #include <iceoryx_posh/popo/untyped_server.hpp>
 
 void manage_device(const std::string& device, uint16_t port);
+void swap_in();
+void swap_out()
 
 struct ShmemServer {
 

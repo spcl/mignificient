@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include <cuda.h>
+#include <cuda_runtime_api.h>
 #include <spdlog/spdlog.h>
 
 #include <iceoryx_posh/runtime/posh_runtime.hpp>
@@ -26,6 +27,14 @@ extern const int BACKLOG;
 
 static bool g_device_initialized = false;
 static int64_t g_sync_counter = 0;
+
+struct DataElement {
+    void* devicePtr;
+    void* hostPtr;
+    size_t size;
+};
+
+std::vector<DataElement> ptrSizeStore;
 
 static gpuless::CudaTrace &getCudaTrace() {
     static gpuless::CudaTrace cuda_trace;
@@ -68,6 +77,24 @@ flatbuffers::FlatBufferBuilder handle_attributes_request(const gpuless::FBProtoc
     SPDLOG_DEBUG("FBTraceAttributesResponse sent");
 
     return builder;
+}
+
+void add_to_mem_list(void* devicePtr, size_t size){
+    DataElement de;
+    de.devicePtr = devicePtr;
+    de.hostPtr = nullptr;
+    de.size = size;
+    ptrSizeStore.push_back(de);
+}
+
+void remove_from_mem_list(const void* ptrToRemove){
+    // Find and remove elements from ptrSizeStore where devicePtr equals ptrToRemove
+    for (auto it = ptrSizeStore.begin(); it != ptrSizeStore.end(); ++it) {
+        if (it->devicePtr == ptrToRemove) {
+            ptrSizeStore.erase(it);
+            break; // Exit loop after removing the first matching element
+        }
+    }
 }
 
 flatbuffers::FlatBufferBuilder handle_execute_request(const gpuless::FBProtocolMessage *msg, int socket_fd) {
@@ -118,6 +145,13 @@ flatbuffers::FlatBufferBuilder handle_execute_request(const gpuless::FBProtocolM
                           apiCall->nativeErrorToString(err), err);
             std::exit(EXIT_FAILURE);
         }
+        // if cudaMalloc & cudaFree executes correctly, add then to mem list
+        if (apiCall->typeName() == "CudaMalloc"){
+            add_to_mem_list(apiCall->*devPtr, apiCall->size);
+        }
+        else if (apiCall->typeName() == "CudaFree") {
+            remove_from_mem_list(apiCall->*devPtr);
+        }
     }
     //auto e = std::chrono::high_resolution_clock::now();
     //auto d =
@@ -146,6 +180,74 @@ flatbuffers::FlatBufferBuilder handle_execute_request(const gpuless::FBProtocolM
     builder.Finish(fb_protocol_message);
     send_buffer(socket_fd, builder.GetBufferPointer(), builder.GetSize());
     return builder;
+}
+
+void swap_in() {
+    // Number of streams to create
+    const int numStreams = 4;
+
+    // Array to store stream handles
+    cudaStream_t streams[numStreams];
+
+    // Create multiple streams
+    for (int i = 0; i < numStreams; ++i) {
+        cudaStreamCreate(&streams[i]);
+    }
+
+    // Reserve memory on device
+    int streamIdx = 0;
+    for (auto& buffer : ptrSizeStore) {
+        // allocate size
+        cudaMalloc(&buffer.devicePtr, buffer.size);
+        cudaMemcpyAsync(buffer.devicePtr, buffer.hostPtr, buffer.size, cudaMemcpyHostToDevice, streams[streamIdx % numStreams]); // hostPtr should be a pinned mem.
+        streamIdx += 1;
+    }
+
+    // Wait for transfers to complete
+    cudaDeviceSynchronize();
+
+    ptrSizeStore.clear();
+
+    // Destroy streams when no longer needed
+    for (int i = 0; i < numStreams; ++i) {
+        cudaStreamDestroy(streams[i]);
+    }
+}
+
+void swap_out() {
+    // Number of streams to create
+    const int numStreams = 4;
+
+    // Array to store stream handles
+    cudaStream_t streams[numStreams];
+
+    // Create multiple streams
+    for (int i = 0; i < numStreams; ++i) {
+        cudaStreamCreate(&streams[i]);
+    }
+
+    int streamIdx = 0;
+    for (auto& buffer : ptrSizeStore) {
+        void* tempVector;
+        cudaHostAlloc(&tempVector, buffer.size, cudaHostAllocDefault);
+        buffer.hostPtr = tempVector;
+        // Schedule transfers from device to host
+        cudaMemcpyAsync(buffer.hostPtr, buffer.devicePtr, buffer.size, cudaMemcpyDeviceToHost, streams[streamIdx % numStreams]);
+        streamIdx += 1;
+    }
+
+    // Wait for transfers to complete
+    cudaDeviceSynchronize();
+
+    // Delete all user buffers
+    for (const auto& buffer : ptrSizeStore) {
+        cudaFree(buffer.devicePtr);
+    }
+
+    // Destroy streams when no longer needed
+    for (int i = 0; i < numStreams; ++i) {
+        cudaStreamDestroy(streams[i]);
+    }
 }
 
 void handle_request(int socket_fd) {
