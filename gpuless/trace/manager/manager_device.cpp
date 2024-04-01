@@ -79,7 +79,7 @@ flatbuffers::FlatBufferBuilder handle_attributes_request(const gpuless::FBProtoc
     return builder;
 }
 
-void add_to_mem_list(const void* devicePtr, size_t size){
+void add_to_mem_list(void* devicePtr, size_t size){
     DataElement de;
     de.devicePtr = devicePtr;
     de.hostPtr = nullptr;
@@ -183,26 +183,57 @@ flatbuffers::FlatBufferBuilder handle_execute_request(const gpuless::FBProtocolM
 }
 
 void swap_in() {
+    // Number of streams to create
+    const int numStreams = 4;
+
+    // Array to store stream handles
+    cudaStream_t streams[numStreams];
+
+    // Create multiple streams
+    for (int i = 0; i < numStreams; ++i) {
+        cudaStreamCreate(&streams[i]);
+    }
+
     // Reserve memory on device
+    int streamIdx = 0;
     for (auto& buffer : ptrSizeStore) {
         // allocate size
         cudaMalloc(&buffer.devicePtr, buffer.size);
-        cudaMemcpy(buffer.devicePtr, buffer.hostPtr, buffer.size, cudaMemcpyHostToDevice);
+        cudaMemcpyAsync(buffer.devicePtr, buffer.hostPtr, buffer.size, cudaMemcpyHostToDevice, streams[streamIdx % numStreams]); // hostPtr should be a pinned mem.
+        streamIdx += 1;
     }
 
     // Wait for transfers to complete
     cudaDeviceSynchronize();
 
     ptrSizeStore.clear();
+
+    // Destroy streams when no longer needed
+    for (int i = 0; i < numStreams; ++i) {
+        cudaStreamDestroy(streams[i]);
+    }
 }
 
 void swap_out() {
+    // Number of streams to create
+    const int numStreams = 4;
+
+    // Array to store stream handles
+    cudaStream_t streams[numStreams];
+
+    // Create multiple streams
+    for (int i = 0; i < numStreams; ++i) {
+        cudaStreamCreate(&streams[i]);
+    }
+
+    int streamIdx = 0;
     for (auto& buffer : ptrSizeStore) {
         void* tempVector;
         cudaHostAlloc(&tempVector, buffer.size, cudaHostAllocDefault);
         buffer.hostPtr = tempVector;
         // Schedule transfers from device to host
-        cudaMemcpy(buffer.hostPtr, buffer.devicePtr, buffer.size, cudaMemcpyDeviceToHost);
+        cudaMemcpyAsync(buffer.hostPtr, buffer.devicePtr, buffer.size, cudaMemcpyDeviceToHost, streams[streamIdx % numStreams]);
+        streamIdx += 1;
     }
 
     // Wait for transfers to complete
@@ -211,6 +242,11 @@ void swap_out() {
     // Delete all user buffers
     for (const auto& buffer : ptrSizeStore) {
         cudaFree(buffer.devicePtr);
+    }
+
+    // Destroy streams when no longer needed
+    for (int i = 0; i < numStreams; ++i) {
+        cudaStreamDestroy(streams[i]);
     }
 }
 
