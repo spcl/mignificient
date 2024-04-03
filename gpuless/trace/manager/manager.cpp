@@ -192,15 +192,22 @@ void setup_devices() {
     std::vector<std::string> split_devices;
     string_split(smi_string, '\n', split_devices);
     for(const auto& d : split_devices) {
-        std::string::size_type GPU_idx = d.find("GPU-");
-        std::string GPU_ID = d.substr(GPU_idx, d.size() - GPU_idx - 1);
-        devices.emplace_back(GPU_ID, NO_MIG, NO_SESSION_ASSIGNED);
+        //std::string::size_type GPU_idx = d.find("GPU-");
+        std::string::size_type GPU_idx = d.find("MIG-");
+        if(GPU_idx != std::string::npos ){
+          std::string GPU_ID = d.substr(GPU_idx, d.size() - GPU_idx - 1);
+          devices.emplace_back(GPU_ID, NO_MIG, NO_SESSION_ASSIGNED);
+          //devices.emplace_back(d, NO_MIG, NO_SESSION_ASSIGNED);
+          // FIXME: temporary hack to use only one device
+          break;
+        }
     }
 }
 
 void sigint_handler(int signum) {
     for (const auto &p : child_processes) {
-        kill(p.second.first, SIGTERM);
+        //kill(p.second.first, SIGTERM);
+        kill(p.second.first, SIGINT);
         wait(nullptr);
     }
     exit(signum);

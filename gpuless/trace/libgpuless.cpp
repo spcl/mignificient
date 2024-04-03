@@ -20,6 +20,9 @@
 
 using namespace gpuless;
 
+using time_stamp = std::chrono::time_point<std::chrono::system_clock,
+                                                 std::chrono::nanoseconds>;
+
 const int CUDA_MAJOR_VERSION = 8;
 const int CUDA_MINOR_VERSION = 0;
 
@@ -195,6 +198,21 @@ static void exitHandler() {
 
 extern "C" {
 
+void* mignificient_malloc(size_t size)
+{
+  //hijackInit();
+  getTraceExecutor();
+  auto chunk = pool->get(size);
+  //std::cerr << "malloc " << chunk.name << std::endl;
+  return chunk.ptr;
+}
+
+void mignificient_free(void* ptr)
+{
+  //hijackInit();
+  pool->give(ptr);
+}
+
 /*
  * CUDA runtime API
  */
@@ -279,22 +297,81 @@ cudaError_t cudaEventSynchronize(cudaEvent_t event) {
     return cudaSuccess;
 }
 
+//cudaError_t cudaMallocHost(void **ptr, size_t size) {
+//
+//    auto chunk = pool->get(size);
+//    *ptr = chunk.ptr;
+//    return cudaSuccess;
+//}
+
 cudaError_t cudaMemcpy(void *dst, const void *src, size_t count,
                        enum cudaMemcpyKind kind) {
+    //auto s = std::chrono::high_resolution_clock::now();
     hijackInit();
     HIJACK_FN_PROLOGUE();
     if (kind == cudaMemcpyHostToDevice) {
         SPDLOG_INFO("{}() [cudaMemcpyHostToDevice, {} <- {}, pid={}]", __func__,
                     dst, src, getpid());
 
+        //char* ptr = new char[count]();
 
+    //time_stamp ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "H2D request start " << ts.time_since_epoch().count() << std::endl;
         if(pool) {
 
-          auto chunk = pool->get();
-          auto rec = std::make_shared<CudaMemcpyH2D>(dst, src, count, chunk.name);
-          std::memcpy(chunk.ptr, src, count);
+          auto chunk_name = pool->get_name(src);
 
-          getCudaTrace().record(rec);
+          if(chunk_name.has_value()) {
+            //s = std::chrono::high_resolution_clock::now();
+            auto rec = std::make_shared<CudaMemcpyH2D>(dst, src, count, chunk_name.value());
+            getCudaTrace().record(rec);
+
+          } else {
+
+
+          auto chunk = pool->get();
+    //ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "Chunk get " << ts.time_since_epoch().count() << std::endl;
+          auto rec = std::make_shared<CudaMemcpyH2D>(dst, src, count, chunk.name);
+    //ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "Rec create " << ts.time_since_epoch().count() << std::endl;
+    //ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+          //auto s = std::chrono::high_resolution_clock::now();
+          //for(int i = 0; i < 10; ++i)
+
+          std::memcpy(chunk.ptr, src, count);
+          //std::cerr << "COPY" << std::endl;
+    //auto s = std::chrono::high_resolution_clock::now();
+    //      std::memcpy(ptr, src, count);
+    //auto e = std::chrono::high_resolution_clock::now();
+    //auto d =
+    //    std::chrono::duration_cast<std::chrono::nanoseconds>(e - s).count() / 1000.0;
+    //std::cerr << "copy2 " << d << " " << " H2D? " << (kind == cudaMemcpyHostToDevice) << std::endl;
+
+          //auto e = std::chrono::high_resolution_clock::now();
+          //auto d =
+          //    std::chrono::duration_cast<std::chrono::nanoseconds>(e - s).count() / 10.0;
+          //    //1000000.0;
+    //std::cerr << "memcpy " << ts.time_since_epoch().count() << " " << count << std::endl;
+    //      std::cerr << "memcpy " << d << std::endl;
+
+    //      char* t = new char[count];
+    //ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "memcpy new start " << ts.time_since_epoch().count() << " " << count << std::endl;
+    //      s = std::chrono::high_resolution_clock::now();
+    //      for(int i = 0; i < 10; ++i)
+    //      std::memcpy(t, src, count);
+    //      e = std::chrono::high_resolution_clock::now();
+    //      d =
+    //          std::chrono::duration_cast<std::chrono::nanoseconds>(e - s).count() / 10.0;
+    //      std::cerr << "new memcpy " << d << std::endl;
+    //ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "memcpy new end " << ts.time_since_epoch().count() << " " << count << std::endl;
+    //      delete[] t;
+
+          getCudaTrace().record(rec);}
+    //ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "record " << ts.time_since_epoch().count() << std::endl;
         } else {
           auto rec = std::make_shared<CudaMemcpyH2D>(dst, src, count);
 
@@ -302,39 +379,84 @@ cudaError_t cudaMemcpy(void *dst, const void *src, size_t count,
           std::memcpy(rec->buffer.data(), src, count);
           getCudaTrace().record(rec);
         }
+    //ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "H2D request end " << ts.time_since_epoch().count() << std::endl;
         //std::memcpy(rec->buffer_ptr, src, count);
   
     } else if (kind == cudaMemcpyDeviceToHost) {
         SPDLOG_INFO("{}() [cudaMemcpyDeviceToHost, {} <- {}, pid={}]", __func__,
                     dst, src, getpid());
 
+    //time_stamp ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "D2H request start " << ts.time_since_epoch().count() << std::endl;
 
         if(pool) {
+
+          auto chunk_name = pool->get_name(dst);
+
+          if(chunk_name.has_value()) {
+
+            auto rec = std::make_shared<CudaMemcpyD2H>(dst, src, count, chunk_name.value());
+            getCudaTrace().record(rec);
+            getTraceExecutor()->synchronize(getCudaTrace());
+
+          } else {
+
+
           auto chunk = pool->get();
           //std::cerr << "d2h " << " " << chunk.name << " " << chunk.ptr << std::endl;
           auto rec = std::make_shared<CudaMemcpyD2H>(dst, src, count, chunk.name);
           getCudaTrace().record(rec);
           getTraceExecutor()->synchronize(getCudaTrace());
+    //ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "D2H start sync request " << ts.time_since_epoch().count() << std::endl;
+    //      getTraceExecutor()->synchronize(getCudaTrace());
+    //ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "D2H end sync request " << ts.time_since_epoch().count() << std::endl;
 
           //std::shared_ptr<CudaMemcpyD2H> top =
           //    (const std::shared_ptr<CudaMemcpyD2H> &)getCudaTrace().historyTop();
           //std::memcpy(dst, top->buffer, count);
           // Host side - we copy the received data
+          //auto s = std::chrono::high_resolution_clock::now();
+
           std::memcpy(dst, chunk.ptr, count);
 
+          //auto e = std::chrono::high_resolution_clock::now();
+          //auto d =
+          //    std::chrono::duration_cast<std::chrono::microseconds>(e - s).count();
+          //    //1000000.0;
+          //std::cerr << "d2h copy " << d << std::endl;
+
           pool->give(chunk.name);
+
+          }
+    //ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "D2H end " << ts.time_since_epoch().count() << std::endl;
 
         } else {
           auto rec = std::make_shared<CudaMemcpyD2H>(dst, src, count);
 
+          //auto s = std::chrono::high_resolution_clock::now();
           getCudaTrace().record(rec);
           getTraceExecutor()->synchronize(getCudaTrace());
+          //auto e = std::chrono::high_resolution_clock::now();
+          //auto d =
+          //    std::chrono::duration_cast<std::chrono::microseconds>(e - s).count();
+          //    //1000000.0;
+          //std::cerr << "sync " << d << std::endl;
 
+          //s = std::chrono::high_resolution_clock::now();
           std::shared_ptr<CudaMemcpyD2H> top =
               (const std::shared_ptr<CudaMemcpyD2H> &)getCudaTrace().historyTop();
           //std::memcpy(dst, top->buffer, count);
           // Host side - we copy the received data
           std::memcpy(dst, top->buffer_ptr, count);
+          //e = std::chrono::high_resolution_clock::now();
+          //d =
+          //    std::chrono::duration_cast<std::chrono::microseconds>(e - s).count() /
+          //    1000000.0;
+          //std::cerr << "copy " << d << std::endl;
         }
 
         //        auto *dstb = reinterpret_cast<uint8_t *>(dst);
@@ -348,6 +470,10 @@ cudaError_t cudaMemcpy(void *dst, const void *src, size_t count,
     } else {
         EXIT_NOT_IMPLEMENTED("cudaMemcpyKind");
     }
+    //auto e = std::chrono::high_resolution_clock::now();
+    //auto d =
+    //    std::chrono::duration_cast<std::chrono::nanoseconds>(e - s).count() / 1000.0;
+    //std::cerr << "DATA " << d << " " << " H2D? " << (kind == cudaMemcpyHostToDevice) << std::endl;
     return cudaSuccess;
 }
 
@@ -474,6 +600,7 @@ cudaError_t cudaDeviceSynchronize(void) {
     hijackInit();
     HIJACK_FN_PROLOGUE();
     getCudaTrace().record(std::make_shared<CudaDeviceSynchronize>());
+    getTraceExecutor()->synchronize(getCudaTrace());
     return cudaSuccess;
 }
 

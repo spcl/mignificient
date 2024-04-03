@@ -8,6 +8,7 @@
 #include <tuple>
 #include <utility>
 
+#include <dlfcn.h>
 #include <spdlog/fmt/fmt.h>
 
 #include "executor.hpp"
@@ -74,7 +75,11 @@ namespace mignificient { namespace orchestrator {
 
   struct Orchestrator {
 
-    Orchestrator()
+    typedef size_t (*fptr)(uint8_t*);
+    fptr func;
+
+    Orchestrator(fptr func = nullptr):
+      func(func)
     {
       waitset_ptr = &waitset;
       sigint.emplace(iox::posix::registerSignalHandler(iox::posix::Signal::INT, sigHandler));
@@ -121,6 +126,8 @@ namespace mignificient { namespace orchestrator {
 
           if(res.value().get()->msg == executor::Message::FINISH) {
             spdlog::info("Finish {}", std::string_view{reinterpret_cast<const char*>(res.value().get()->data.data()), res.value().get()->size});
+            quit=true;
+            break;
           } else {
             spdlog::info("Yield {}");
           }
@@ -136,7 +143,7 @@ namespace mignificient { namespace orchestrator {
           //  return InvocationData{ptr->data.data(), ptr->data.size()};
           //}
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        //std::this_thread::sleep_for(std::chrono::milliseconds(100));
       }
 
     }
@@ -164,18 +171,43 @@ int main(int argc, char ** argv)
   constexpr char APP_NAME[] = "gpuless-orchestrator";
   iox::runtime::PoshRuntime::initRuntime(APP_NAME);
 
-  mignificient::orchestrator::Orchestrator orchestrator;
+  void *handle = nullptr;
+  mignificient::orchestrator::Orchestrator::fptr func = nullptr;
+
+  if(argc == 2) {
+    handle = dlopen(argv[1], RTLD_NOW);
+    if (handle == nullptr)
+    {
+        std::cout << dlerror() << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    func = (mignificient::orchestrator::Orchestrator::fptr)dlsym(handle, "input_generator");
+    if (!func)
+    {
+        std::cout << dlerror() << std::endl;
+        exit(EXIT_FAILURE);
+    }
+  }
+  mignificient::orchestrator::Orchestrator orchestrator{func};
 
   orchestrator.add_client();
 
   auto& client = *orchestrator.client(0);
   client.request().id = "test";
-  client.request().data.resize(4);
-  int val = 42;
-  memcpy(client.request().data.data(), &val, sizeof(int));
-  client.request().size = 4;
+  client.request().data.resize(64);
+
+  if(func) {
+    client.request().size = func(client.request().data.data());
+  } else {
+    int val = 42;
+    memcpy(client.request().data.data(), &val, sizeof(int));
+    client.request().size = 4;
+  }
   client.send_request();
 
   orchestrator.wait();
 
+  if(handle)
+    dlclose(handle);
 }

@@ -22,6 +22,9 @@
 
 #include "../trace_executor_shmem_client.hpp"
 
+using time_stamp = std::chrono::time_point<std::chrono::system_clock,
+                                                 std::chrono::nanoseconds>;
+
 extern const int BACKLOG;
 
 static bool g_device_initialized = false;
@@ -215,6 +218,9 @@ void ShmemServer::_process_client(const void* requestPayload)
     //std::cerr << "replied " << d << " , " << d1 << " , total " << _sum << std::endl;
 
     ////! [send response]
+
+    //time_stamp ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "Responding at " << ts.time_since_epoch().count() << std::endl;
     auto requestHeader = iox::popo::RequestHeader::fromPayload(requestPayload);
     server->loan(requestHeader, sizeof(builder.GetSize()), alignof(1))
         .and_then([&](auto& responsePayload) {
@@ -229,6 +235,8 @@ void ShmemServer::_process_client(const void* requestPayload)
         .or_else(
             [&](auto& error) { std::cout << "Could not allocate Response! Error: " << error << std::endl; });
     //! [send response]
+    //ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "Responding at " << ts.time_since_epoch().count() << std::endl;
 
     server->releaseRequest(requestPayload);
 
@@ -251,16 +259,21 @@ void ShmemServer::loop_wait()
     {
         auto notificationVector = waitset.wait();
 
+    //time_stamp ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "eceived at " << ts.time_since_epoch().count() << std::endl;
         for (auto& notification : notificationVector)
         {
+          std::cerr << "received!" << std::endl;
             if(notification->doesOriginateFrom(server.get())) {
 
+          std::cerr << "take!" << std::endl;
                 //! [take request]
                 server->take().and_then([&](auto& requestPayload) {
                     _process_client(requestPayload);
                 });
 
             }
+          std::cerr << "done!" << std::endl;
         }
 
     }
@@ -275,6 +288,8 @@ void ShmemServer::loop()
     {
         //! [take request]
         server->take().and_then([&](auto& requestPayload) {
+    //time_stamp ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "Poll Received at " << ts.time_since_epoch().count() << std::endl;
             _process_client(requestPayload);
         });
         //! [take request]
@@ -284,6 +299,7 @@ void ShmemServer::loop()
 
 void manage_device(const std::string& device, uint16_t port) {
     setenv("CUDA_VISIBLE_DEVICES", device.c_str(), 1);
+    std::cerr << device.c_str() << std::endl;
 
     const char* manager_type = std::getenv("MANAGER_TYPE");
     const char* poll_type = std::getenv("POLL_TYPE");
@@ -339,7 +355,7 @@ void manage_device(const std::string& device, uint16_t port) {
       // initialize cuda device pre-emptively
       getCudaVirtualDevice().initRealDevice();
 
-      if(std::string_view{poll_type} == "WAIT") {
+      if(std::string_view{poll_type}.compare("wait") == 0){
         shm_server.loop_wait();
       } else {
         shm_server.loop();

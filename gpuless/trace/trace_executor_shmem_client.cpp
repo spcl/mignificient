@@ -5,6 +5,10 @@
 #include <spdlog/spdlog.h>
 
 #include <iceoryx_posh/runtime/posh_runtime.hpp>
+#include <chrono>
+
+using time_stamp = std::chrono::time_point<std::chrono::system_clock,
+                                                 std::chrono::nanoseconds>;
 
 namespace gpuless {
 
@@ -37,10 +41,13 @@ TraceExecutorShmem::TraceExecutorShmem()
     //iox::runtime::PoshRuntime::initRuntime(APP_NAME);
 
     // FIXME: Parameter
+    //client.reset(new iox::popo::UntypedClient({"Example", "Request-Response", "Add"}));
     client.reset(new iox::popo::UntypedClient({"Example", "Request-Response", "Add"}));
 
     waitset.emplace();
-    wait_poll = std::string_view{std::getenv("POLL_TYPE")} == "WAIT";
+    //wait_poll = std::string_view{std::getenv("POLL_TYPE")} == "WAIT";
+    wait_poll = std::string_view{std::getenv("POLL_TYPE")}.compare("wait") == 0;
+    std::cerr << "Wait poll? " << wait_poll << std::endl; // " " << std::string_view{std::getenv("POLL_TYPE")}.compare("WAIT") << " " << std::getenv("POLL_TYPE")<< std::endl;
 
     if(wait_poll) {
       waitset.value().attachState(*client, iox::popo::ClientState::HAS_RESPONSE).or_else([](auto) {
@@ -189,6 +196,9 @@ bool TraceExecutorShmem::synchronize(CudaTrace &cuda_trace) {
     int64_t expectedResponseSequenceId = requestSequenceId;
     auto s1 = std::chrono::high_resolution_clock::now();
     // FIXME: what should be the alignment here?
+
+    //time_stamp ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "Sending at " << ts.time_since_epoch().count() << std::endl;
     client->loan(builder.GetSize(), 16)
         .and_then([&](auto& requestPayload) {
 
@@ -197,6 +207,7 @@ bool TraceExecutorShmem::synchronize(CudaTrace &cuda_trace) {
             expectedResponseSequenceId = requestSequenceId;
             requestSequenceId += 1;
 
+            std::cerr << "PAYLOAD SIZE " << builder.GetSize() << std::endl;
             memcpy(requestPayload, builder.GetBufferPointer(), builder.GetSize());
 
             client->send(requestPayload).or_else(
@@ -205,6 +216,8 @@ bool TraceExecutorShmem::synchronize(CudaTrace &cuda_trace) {
         })
         .or_else([](auto& error) { std::cout << "Could not allocate Request! Error: " << error << std::endl; });
     SPDLOG_INFO("Trace execution request sent");
+    //ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "Sent at " << ts.time_since_epoch().count() << std::endl;
 
     //! [take response]
     std::shared_ptr<AbstractCudaApiCall> cuda_api_call = nullptr;
@@ -213,7 +226,8 @@ bool TraceExecutorShmem::synchronize(CudaTrace &cuda_trace) {
     for(auto & call : cuda_trace.callStack()) {
 
       if(auto* ptr = dynamic_cast<CudaMemcpyH2D*>(call.get())) {
-        _pool.give(ptr->shared_name);
+        if(ptr->shared_name.find("/gpuless_user_") == std::string::npos)
+          _pool.give(ptr->shared_name);
       }
 
     }
@@ -251,6 +265,8 @@ bool TraceExecutorShmem::synchronize(CudaTrace &cuda_trace) {
 
         auto notificationVector = waitset.value().wait();
 
+    //time_stamp ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "Received at " << ts.time_since_epoch().count() << std::endl;
         for (auto& notification : notificationVector)
         {
 
@@ -279,6 +295,8 @@ bool TraceExecutorShmem::synchronize(CudaTrace &cuda_trace) {
 
         } else {
 
+    //time_stamp ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+    //std::cerr << "Poll Received at " << ts.time_since_epoch().count() << std::endl;
           process(val);
           break;
 

@@ -11,4 +11,5 @@ add_dependencies(orchestrator spdlog)
 target_link_libraries(orchestrator
   spdlog::spdlog
   iceoryx_posh::iceoryx_posh
+  dl
 )
