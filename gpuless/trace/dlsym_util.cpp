@@ -17,7 +17,7 @@ void *real_dlsym(void *handle, const char *symbol) {
     	static auto internal_dlsym = (decltype(&dlsym))__libc_dlsym(
         		__libc_dlopen_mode("libdl.so.2", RTLD_LAZY), "dlsym");
 #else
-    	static auto internal_dlsym = (decltype(&dlsym))dlvsym(RTLD_NEXT, "dlsym", "GLIBC_2.34");
+    	static auto internal_dlsym = (decltype(&dlsym))dlvsym(RTLD_NEXT, "dlsym", "GLIBC_2.2.5");
 #endif
     return (*internal_dlsym)(handle, symbol);
 }
