@@ -149,7 +149,13 @@ flatbuffers::FlatBufferBuilder handle_execute_request(const gpuless::FBProtocolM
 }
 
 void handle_request(int socket_fd) {
+
+  while(true) {
+
     std::vector<uint8_t> buffer = recv_buffer(socket_fd);
+    if(buffer.size() == 0) {
+      break;
+    }
     auto msg = gpuless::GetFBProtocolMessage(buffer.data());
 
     if (msg->message_type() == gpuless::FBMessage_FBTraceExecRequest) {
@@ -161,6 +167,8 @@ void handle_request(int socket_fd) {
         SPDLOG_ERROR("Invalid request type");
         return;
     }
+
+  }
 }
 
 void ShmemServer::setup(const std::string app_name)
