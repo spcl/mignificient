@@ -24,6 +24,19 @@ static size_t &getBytesReceived() {
     return bytes;
 }
 
+void recv_buffer(int socket_fd, std::vector<uint8_t> & buf, int msg_len) {
+    size_t bytes_read = 0;
+    do {
+        void *dst = buf.data() + bytes_read;
+        size_t n_read = std::min(65536UL, msg_len - bytes_read);
+        bytes_read += recv(socket_fd, dst, n_read, 0);
+    } while (bytes_read < msg_len);
+
+    auto &bytes_recvd_total = getBytesReceived();
+    bytes_recvd_total += bytes_read;
+    SPDLOG_INFO("Bytes received: {}", bytes_recvd_total);
+}
+
 std::vector<uint8_t> recv_buffer(int socket_fd) {
     size_t msg_len;
     recv(socket_fd, &msg_len, sizeof(msg_len), 0);
