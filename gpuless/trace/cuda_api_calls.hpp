@@ -18,6 +18,7 @@
 
 namespace gpuless {
 
+
 class CudaRuntimeApiCall : public AbstractCudaApiCall {
   public:
     std::string nativeErrorToString(uint64_t err) override;

@@ -50,7 +50,7 @@ CudaMalloc::CudaMalloc(const FBCudaApiCall *fb_cuda_api_call) {
  * cudaMemcpyH2D
  */
 CudaMemcpyH2D::CudaMemcpyH2D(void *dst, const void *src, size_t size)
-    : dst(dst), src(src), size(size), buffer(size), shared_name("") {}
+    : dst(dst), src(src), size(size), shared_name("") {}
 
 CudaMemcpyH2D::CudaMemcpyH2D(void *dst, const void *src, size_t size, std::string shared_name)
     : dst(dst), src(src), size(size), shared_name(shared_name) {}
@@ -81,15 +81,14 @@ CudaMemcpyH2D::fbSerialize(flatbuffers::FlatBufferBuilder &builder) {
       api_call =
             CreateFBCudaMemcpyH2D(builder, reinterpret_cast<uint64_t>(this->dst),
                                 reinterpret_cast<uint64_t>(this->src), this->size,
-                                //builder.CreateVector(this->buffer));
                                 builder.CreateString(this->shared_name),
-                                builder.CreateVector(static_cast<uint8_t*>(nullptr), 0));
+                                0);
     } else {
       api_call =
         CreateFBCudaMemcpyH2D(builder, reinterpret_cast<uint64_t>(this->dst),
                               reinterpret_cast<uint64_t>(this->src), this->size,
                               builder.CreateString(this->shared_name),
-                              builder.CreateVector(this->buffer));
+                              this->buffer.size());
     }
     auto api_call_union = CreateFBCudaApiCall(
         builder, FBCudaApiCallUnion_FBCudaMemcpyH2D, api_call.Union());
@@ -102,6 +101,7 @@ CudaMemcpyH2D::fbSerialize(flatbuffers::FlatBufferBuilder &builder) {
     return api_call_union;
 }
 
+
 CudaMemcpyH2D::CudaMemcpyH2D(const FBCudaApiCall *fb_cuda_api_call) {
     //auto s = std::chrono::high_resolution_clock::now();
     auto c = fb_cuda_api_call->api_call_as_FBCudaMemcpyH2D();
@@ -113,12 +113,21 @@ CudaMemcpyH2D::CudaMemcpyH2D(const FBCudaApiCall *fb_cuda_api_call) {
     this->dst = reinterpret_cast<void *>(c->dst());
     this->src = reinterpret_cast<void *>(c->src());
     this->size = c->size();
+    this->buffer.resize(c->sent_bytes());
+    //this->sent_bytes = 0;
     this->shared_name = *c->mmap()->c_str();
     //this->buffer = std::vector<uint8_t>(c->size());
     //std::memcpy(this->buffer.data(), c->buffer()->data(), c->buffer()->size());
 
+
     if(c->mmap()->size() == 0) {
-      this->buffer_ptr = const_cast<unsigned char*>(c->buffer()->data());
+
+      // Read from TCP?
+      if(this->buffer.size() > 0) {
+        recv_buffer(tcp_socket(), this->buffer, this->buffer.size());
+      }
+
+      //this->buffer_ptr = const_cast<unsigned char*>(c->buffer()->data());
     } else {
 
       //auto s = std::chrono::high_resolution_clock::now();
@@ -142,10 +151,10 @@ CudaMemcpyH2D::CudaMemcpyH2D(const FBCudaApiCall *fb_cuda_api_call) {
  * cudaMemcpyD2H
  */
 CudaMemcpyD2H::CudaMemcpyD2H(void *dst, const void *src, size_t size)
-    : dst(dst), src(src), size(size), buffer(size), buffer_ptr(nullptr) {}
+    : dst(dst), src(src), size(size), buffer(size), buffer_ptr(nullptr) { 
 
 CudaMemcpyD2H::CudaMemcpyD2H(void *dst, const void *src, size_t size, std::string shared_name)
-    : dst(dst), src(src), size(size), buffer_ptr(nullptr), shared_name(shared_name) {}
+    : dst(dst), src(src), size(size), buffer_ptr(nullptr), shared_name(shared_name) {
 
 uint64_t CudaMemcpyD2H::executeNative(CudaVirtualDevice &vdev) {
     static auto real =
@@ -182,7 +191,8 @@ CudaMemcpyD2H::fbSerialize(flatbuffers::FlatBufferBuilder &builder) {
                                 reinterpret_cast<uint64_t>(this->src), this->size,
                                 //builder.CreateVector(this->buffer));
                                 builder.CreateString(this->shared_name),
-                                builder.CreateVector(this->buffer));
+                                //builder.CreateVector(this->buffer));
+                                builder.CreateVector(static_cast<uint8_t*>(nullptr), 0));
                                 //builder.CreateString(this->buffer.data(), this->buffer.size()));
     }
     //auto e = std::chrono::high_resolution_clock::now();
@@ -200,10 +210,15 @@ CudaMemcpyD2H::CudaMemcpyD2H(const FBCudaApiCall *fb_cuda_api_call) {
     this->dst = reinterpret_cast<void *>(c->dst());
     this->src = reinterpret_cast<void *>(c->src());
     this->size = c->size();
+    // we might have received empty buffer, no data send -> allocate it!
     this->shared_name = *c->mmap()->c_str();
 
     if(c->mmap()->size() == 0) {
+      //this->buffer_ptr = const_cast<unsigned char*>(c->buffer()->data());
       this->buffer_ptr = const_cast<unsigned char*>(c->buffer()->data());
+      if(this->buffer.size() == 0) {
+        this->buffer.resize(this->size);
+      }
     } else {
 
       //auto s = std::chrono::high_resolution_clock::now();
