@@ -191,9 +191,11 @@ void setup_devices() {
     std::string smi_string = exec(cmd.c_str());
     std::vector<std::string> split_devices;
     string_split(smi_string, '\n', split_devices);
+
+    std::string prefix{std::getenv("GPU_TRACE_PREFIX")};
     for(const auto& d : split_devices) {
-        //std::string::size_type GPU_idx = d.find("GPU-");
-        std::string::size_type GPU_idx = d.find("MIG-");
+        std::string::size_type GPU_idx = d.find(prefix);
+        //std::string::size_type GPU_idx = d.find("MIG-");
         if(GPU_idx != std::string::npos ){
           std::string GPU_ID = d.substr(GPU_idx, d.size() - GPU_idx - 1);
           devices.emplace_back(GPU_ID, NO_MIG, NO_SESSION_ASSIGNED);
