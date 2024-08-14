@@ -83,7 +83,6 @@ CudaMemcpyH2D::fbSerialize(flatbuffers::FlatBufferBuilder &builder) {
     auto s = std::chrono::high_resolution_clock::now();
     flatbuffers::Offset<FBCudaMemcpyH2D> api_call;
     if(!this->shared_name.empty()) {
-      //std::cerr << "shmem" << std::endl;
       api_call =
             CreateFBCudaMemcpyH2D(builder, reinterpret_cast<uint64_t>(this->dst),
                                 reinterpret_cast<uint64_t>(this->src), this->size,
@@ -119,7 +118,7 @@ CudaMemcpyH2D::CudaMemcpyH2D(const FBCudaApiCall *fb_cuda_api_call) {
     this->dst = reinterpret_cast<void *>(c->dst());
     this->src = reinterpret_cast<void *>(c->src());
     this->size = c->size();
-    this->shared_name = *c->mmap()->c_str();
+    this->shared_name = c->mmap()->str();
     //this->buffer = std::vector<uint8_t>(c->size());
     //std::memcpy(this->buffer.data(), c->buffer()->data(), c->buffer()->size());
 
@@ -213,7 +212,7 @@ CudaMemcpyD2H::CudaMemcpyD2H(const FBCudaApiCall *fb_cuda_api_call) {
     this->dst = reinterpret_cast<void *>(c->dst());
     this->src = reinterpret_cast<void *>(c->src());
     this->size = c->size();
-    this->shared_name = *c->mmap()->c_str();
+    this->shared_name = c->mmap()->c_str();
 
     if(c->mmap()->size() == 0) {
       this->buffer_ptr = const_cast<unsigned char*>(c->buffer()->data());
