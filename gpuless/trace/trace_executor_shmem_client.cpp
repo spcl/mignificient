@@ -41,7 +41,6 @@ TraceExecutorShmem::TraceExecutorShmem()
     //iox::runtime::PoshRuntime::initRuntime(APP_NAME);
 
     // FIXME: Parameter
-    //client.reset(new iox::popo::UntypedClient({"Example", "Request-Response", "Add"}));
     client.reset(new iox::popo::UntypedClient({"Example", "Request-Response", "Add"}));
 
     waitset.emplace();
@@ -207,7 +206,6 @@ bool TraceExecutorShmem::synchronize(CudaTrace &cuda_trace) {
             expectedResponseSequenceId = requestSequenceId;
             requestSequenceId += 1;
 
-            std::cerr << "PAYLOAD SIZE " << builder.GetSize() << std::endl;
             memcpy(requestPayload, builder.GetBufferPointer(), builder.GetSize());
 
             client->send(requestPayload).or_else(
