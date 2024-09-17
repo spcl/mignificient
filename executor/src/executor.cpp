@@ -1,5 +1,5 @@
 
-#include "executor.hpp"
+#include <mignificient/executor/executor.hpp>
 
 #include <iceoryx_hoofs/posix_wrapper/signal_watcher.hpp>
 #include <iceoryx_hoofs/posix_wrapper/signal_handler.hpp>

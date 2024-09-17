@@ -3,7 +3,7 @@
 #include <spdlog/spdlog.h>
 #include <string>
 
-#include "executor.hpp"
+#include <mignificient/executor/executor.hpp>
 
 int main(int argc, char **argv) {
 

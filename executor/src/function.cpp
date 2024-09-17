@@ -1,6 +1,6 @@
 
-#include "executor.hpp"
-#include "function.hpp"
+#include <mignificient/executor/executor.hpp>
+#include <mignificient/executor/function.hpp>
 
 namespace mignificient {
 
