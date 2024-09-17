@@ -1,16 +1,21 @@
 
 #include <chrono>
 #include <cstdint>
-#include <iceoryx_hoofs/posix_wrapper/signal_handler.hpp>
-#include <iceoryx_posh/popo/subscriber.hpp>
-#include <iceoryx_posh/popo/untyped_publisher.hpp>
-#include <spdlog/spdlog.h>
+#include <fstream>
+#include <memory>
 #include <tuple>
 #include <utility>
 
+#include <drogon/drogon.h>
+#include <iceoryx_hoofs/posix_wrapper/signal_handler.hpp>
+#include <iceoryx_posh/popo/subscriber.hpp>
+#include <iceoryx_posh/popo/untyped_publisher.hpp>
+#include <json/json.h>
 #include <spdlog/fmt/fmt.h>
+#include <spdlog/spdlog.h>
 
 #include "executor.hpp"
+#include "http.hpp"
 
 namespace mignificient { namespace orchestrator {
 
@@ -18,6 +23,7 @@ namespace mignificient { namespace orchestrator {
   iox::popo::WaitSet<>* waitset_ptr = nullptr;
   std::optional<iox::posix::SignalGuard> sigint;
   std::optional<iox::posix::SignalGuard> sigterm;
+  std::shared_ptr<HTTPServer> http_server = nullptr;
 
   void sigHandler(int sig [[maybe_unused]])
   {
@@ -26,6 +32,11 @@ namespace mignificient { namespace orchestrator {
     {
       waitset_ptr->markForDestruction();
     }
+
+    if(http_server) {
+      http_server->shutdown();
+    }
+
   }
 
   struct Client {
@@ -161,21 +172,56 @@ namespace mignificient { namespace orchestrator {
 
 int main(int argc, char ** argv)
 {
+
+  if(argc != 2) {
+    return 1;
+  }
+
+  spdlog::info("Reading configuration from {}", argv[1]);
+
+  Json::Value config;
+  {
+    std::ifstream cfg_data{argv[1]};
+
+    if(!cfg_data.is_open()) {
+      spdlog::error("Failed to open file with JSON config!");
+      return 1;
+    }
+
+    Json::CharReaderBuilder builder;
+    JSONCPP_STRING errs;
+    if (!Json::parseFromStream(builder, cfg_data, &config, &errs)) {
+      spdlog::error("Failed to parse JSON config! {}", errs);
+      return 1;
+    }
+  }
+
   constexpr char APP_NAME[] = "gpuless-orchestrator";
   iox::runtime::PoshRuntime::initRuntime(APP_NAME);
+  iox::runtime::PoshRuntime::initRuntime(
+      iox::RuntimeName_t{iox::cxx::TruncateToCapacity_t{}, config[""].asString()}
+  );
+
+
+  auto http_config = config["http"];
+  auto http_server = std::make_shared<mignificient::orchestrator::HTTPServer>(http_config);
+  http_server->run();
+  mignificient::orchestrator::http_server = http_server;
 
   mignificient::orchestrator::Orchestrator orchestrator;
 
-  orchestrator.add_client();
+  //orchestrator.add_client();
 
-  auto& client = *orchestrator.client(0);
-  client.request().id = "test";
-  client.request().data.resize(4);
-  int val = 42;
-  memcpy(client.request().data.data(), &val, sizeof(int));
-  client.request().size = 4;
-  client.send_request();
+  //auto& client = *orchestrator.client(0);
+  //client.request().id = "test";
+  //client.request().data.resize(4);
+  //int val = 42;
+  //memcpy(client.request().data.data(), &val, sizeof(int));
+  //client.request().size = 4;
+  //client.send_request();
 
   orchestrator.wait();
 
+	spdlog::info("Waiting for HTTP server to close down");
+  http_server->wait();
 }
