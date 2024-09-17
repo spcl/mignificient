@@ -1,0 +1,7 @@
+{
+  "name": "mignificient-orchestrator",
+  "http": {
+    "port": 10000,
+    "threads": 1
+  }
+}
