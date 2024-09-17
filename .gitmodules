@@ -4,3 +4,6 @@
 [submodule "external/iceoryx"]
 	path = external/iceoryx
 	url = https://github.com/eclipse-iceoryx/iceoryx.git
+[submodule "gpuless"]
+	path = gpuless
+	url = git@github.com:spcl/gpuless.git
