@@ -30,8 +30,6 @@ set_target_properties(executor_cpp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_C
 find_package(Python COMPONENTS Interpreter Development)
 find_package(pybind11 CONFIG)
 
-message(${Python_FOUND})
-message(${pybind11_FOUND})
 
 if(Python_FOUND AND pybind11_FOUND)
 
@@ -46,4 +44,8 @@ if(Python_FOUND AND pybind11_FOUND)
     configure_file(python/__init__.py ${CMAKE_CURRENT_BINARY_DIR}/mignificient/__init__.py COPYONLY)
 
     configure_file(python/cli.py ${CMAKE_CURRENT_BINARY_DIR}/bin/executor_python.py COPYONLY)
+else()
+    message(STATUS "NOT building Python executor.")
+    message("Python found? ${Python_FOUND}")
+    message("Pybind11 found? ${pybind11_FOUND}")
 endif()
