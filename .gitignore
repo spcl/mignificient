@@ -33,3 +33,5 @@
 
 .cache
 gpuless/test
+build*
+logs
