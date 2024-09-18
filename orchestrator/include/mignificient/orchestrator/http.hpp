@@ -1,4 +1,5 @@
-
+#ifndef __MIGNIFICIENT_ORCHESTRATOR_HTTP_HPP__
+#define __MIGNIFICIENT_ORCHESTRATOR_HTTP_HPP__
 
 #include <memory>
 
@@ -27,3 +28,4 @@ namespace mignificient { namespace orchestrator {
 
 }}
 
+#endif
