@@ -1,3 +1,5 @@
+#ifndef __MIGNIFICIENT_ORCHESTRATOR_INVOCATION_HPP__
+#define __MIGNIFICIENT_ORCHESTRATOR_INVOCATION_HPP__
 
 #include <string>
 
@@ -19,3 +21,5 @@ namespace mignificient { namespace orchestrator {
   };
 
 }}
+
+#endif

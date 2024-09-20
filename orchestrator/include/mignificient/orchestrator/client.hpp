@@ -5,6 +5,7 @@
 #include <iceoryx_posh/popo/publisher.hpp>
 
 #include <mignificient/executor/executor.hpp>
+#include <mignificient/orchestrator/event.hpp>
 
 namespace mignificient { namespace orchestrator {
 
@@ -28,7 +29,8 @@ namespace mignificient { namespace orchestrator {
       ),
       _payload(
         _send.loan().value()
-      )
+      ),
+      _event_context{EventSource::CLIENT, this}
     {
       //_payload = _send.loan(sizeof(executor::Invocation), alignof(executor::Invocation)).value();
       //_payload = _send.loan().value();
@@ -62,7 +64,14 @@ namespace mignificient { namespace orchestrator {
       return _recv;
     }
 
+    Context* context()
+    {
+      return &_event_context;
+    }
+
   private:
+    Context _event_context;
+
     std::string _id;
     iox::popo::Publisher<mignificient::executor::Invocation> _send;
     iox::popo::Subscriber<mignificient::executor::InvocationResult> _recv;

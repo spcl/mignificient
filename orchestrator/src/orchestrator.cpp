@@ -2,12 +2,15 @@
 #include <mignificient/orchestrator/orchestrator.hpp>
 
 #include <drogon/drogon.h>
+#include <iceoryx_posh/internal/popo/base_subscriber.hpp>
 #include <iceoryx_posh/popo/subscriber.hpp>
 #include <iceoryx_posh/popo/untyped_publisher.hpp>
 #include <json/value.h>
 #include <spdlog/spdlog.h>
 
 #include <mignificient/executor/executor.hpp>
+#include <mignificient/orchestrator/client.hpp>
+#include <mignificient/orchestrator/event.hpp>
 #include <mignificient/orchestrator/http.hpp>
 
 namespace mignificient { namespace orchestrator {
@@ -15,6 +18,11 @@ namespace mignificient { namespace orchestrator {
   bool Orchestrator::_quit;
   iox::popo::WaitSet<>* Orchestrator::_waitset_ptr;
   std::shared_ptr<HTTPServer> Orchestrator::_http_server;
+
+  void handle_http(iox::popo::UserTrigger*, HTTPTrigger* trigger)
+  {
+    spdlog::info("Trigger! {}", trigger->size());
+  }
 
   void Orchestrator::init(const Json::Value& config)
   {
@@ -28,10 +36,20 @@ namespace mignificient { namespace orchestrator {
     _waitset_ptr = &_waitset;
 
     auto http_config = config["http"];
-    _http_server = std::make_shared<HTTPServer>(http_config);
+    _http_server = std::make_shared<HTTPServer>(http_config, _http_trigger);
 
     sigint.emplace(iox::posix::registerSignalHandler(iox::posix::Signal::INT, _sigHandler));
     sigterm.emplace(iox::posix::registerSignalHandler(iox::posix::Signal::TERM, _sigHandler));
+
+    _waitset.attachEvent(
+        _http_trigger.iceoryx_trigger(),
+        iox::popo::createNotificationCallback(handle_http, _http_trigger)
+    ).or_else(
+      [](auto) {
+        spdlog::error("Failed to attach subscriber");
+        std::exit(EXIT_FAILURE);
+      }
+    );
   }
 
   void Orchestrator::run()
@@ -58,6 +76,17 @@ namespace mignificient { namespace orchestrator {
 
   }
 
+  void handle_client(iox::popo::Subscriber<mignificient::executor::InvocationResult>* sub, Client* client)
+  {
+    auto res = client->subscriber().take();
+
+    if(res.value().get()->msg == executor::Message::FINISH) {
+      spdlog::info("Finish {}", std::string_view{reinterpret_cast<const char*>(res.value().get()->data.data()), res.value().get()->size});
+    } else {
+      spdlog::info("Yield {}");
+    }
+  }
+
   void Orchestrator::add_client()
   {
     std::string client_name = fmt::format("client_{}", _client_id);
@@ -68,10 +97,19 @@ namespace mignificient { namespace orchestrator {
       std::forward_as_tuple(client_name)
     );
 
-    _waitset.attachState(client->second.subscriber(), iox::popo::SubscriberState::HAS_DATA, _client_id).or_else([](auto) {
-      spdlog::error("Failed to attach subscriber");
-      std::exit(EXIT_FAILURE);
-    });
+    //_waitset.attachState(client->second.subscriber(), iox::popo::SubscriberEvent::DATA_RECEIVED, _client_id).or_else([](auto) {
+    _waitset.attachEvent(
+        client->second.subscriber(),
+        //*client,
+        iox::popo::SubscriberEvent::DATA_RECEIVED,
+        //0,
+        createNotificationCallback(handle_client, client->second)//client->second.context())
+    ).or_else(
+      [](auto) {
+        spdlog::error("Failed to attach subscriber");
+        std::exit(EXIT_FAILURE);
+      }
+    );
 
     _client_id++;
   }
@@ -94,13 +132,17 @@ namespace mignificient { namespace orchestrator {
 
       for (auto& notification : notificationVector)
       {
-        auto res = client(notification->getNotificationId())->subscriber().take();
 
-        if(res.value().get()->msg == executor::Message::FINISH) {
-          spdlog::info("Finish {}", std::string_view{reinterpret_cast<const char*>(res.value().get()->data.data()), res.value().get()->size});
-        } else {
-          spdlog::info("Yield {}");
-        }
+        (*notification)();
+
+        //Context* ctx = static_cast<Context*>(notification->getUserDefinedContext());
+
+        //if(ctx->type == EventSource::CLIENT) {
+
+
+        //} else if (ctx->type == EventSource::HTTP) {
+        //  spdlog::info("New http message");
+        //}
         //notification->getOrigin<typename T>()
         //auto value = orchestrator.value().take();
 

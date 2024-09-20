@@ -6,7 +6,8 @@
 namespace mignificient { namespace orchestrator {
 
   void HTTPServer::invoke(const drogon::HttpRequestPtr& req,
-              std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+              std::function<void(const drogon::HttpResponsePtr&)>&& callback)
+  {
 
     auto body = req->getBody();
     std::string input(body.data(), body.length());
@@ -15,17 +16,21 @@ namespace mignificient { namespace orchestrator {
     //std::string result = process_invocation(input);
     std::string result = "res";
 
+
     // Create the response
     auto resp = drogon::HttpResponse::newHttpResponse();
     resp->setStatusCode(drogon::k200OK);
     resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
     resp->setBody(result);
 
+    _trigger.trigger(ActiveInvocation{resp, input});
+
     // Send the response
     callback(resp);
   }
 
-  HTTPServer::HTTPServer(Json::Value & config)
+  HTTPServer::HTTPServer(Json::Value & config, HTTPTrigger& trigger):
+    _trigger(trigger)
   {
     drogon::app().addListener("0.0.0.0", config["port"].asInt());
 
