@@ -1,3 +1,5 @@
+#ifndef __MIGNIFICIENT_EXECUTOR_EXECUTOR_HPP__
+#define __MIGNIFICIENT_EXECUTOR_EXECUTOR_HPP__
 
 #include <string>
 #include <optional>
@@ -63,6 +65,6 @@ namespace mignificient { namespace executor {
     static void _sigHandler(int sig);
   };
 
-}
+}}
 
-}
+#endif
