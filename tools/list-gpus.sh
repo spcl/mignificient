@@ -7,6 +7,7 @@ if [ $# -eq 0 ]; then
 fi
 
 output_dir="$1"
+mkdir -p ${output_dir}
 
 # Function to get GPU memory in GB
 get_gpu_memory() {
