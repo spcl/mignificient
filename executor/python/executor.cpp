@@ -1,5 +1,5 @@
 
-#include "executor.hpp"
+#include <mignificient/executor/executor.hpp>
 
 #if defined(WITH_PYTHON)
 
