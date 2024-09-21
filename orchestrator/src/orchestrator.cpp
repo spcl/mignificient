@@ -21,7 +21,9 @@ namespace mignificient { namespace orchestrator {
 
   void handle_http(iox::popo::UserTrigger*, HTTPTrigger* trigger)
   {
-    spdlog::info("Trigger! {}", trigger->size());
+    auto invocations = trigger->get_invocations();
+    spdlog::debug("Received new invocation!");
+    spdlog::info("Trigger! {}", invocations.size());
   }
 
   void Orchestrator::init(const Json::Value& config)

@@ -2,6 +2,7 @@
 #define __MIGNIFICIENT_ORCHESTRATOR_HTTP_HPP__
 
 #include <memory>
+#include <mutex>
 
 #include <drogon/drogon.h>
 #include <iceoryx_posh/popo/user_trigger.hpp>
@@ -31,9 +32,26 @@ namespace mignificient { namespace orchestrator {
       return _invocations.size();
     }
 
+    std::vector<ActiveInvocation> get_invocations()
+    {
+      std::vector<ActiveInvocation> invocations;
+
+      {
+        std::lock_guard<std::mutex> lock{_mutex};
+
+        while(!_invocations.empty()) {
+          invocations.push_back(std::move(_invocations.front()));
+          _invocations.pop();
+        }
+      }
+
+      return invocations;
+    }
+
   private:
     iox::popo::UserTrigger _trigger;
 
+    // TODO: Lock-free queue?
     std::mutex _mutex;
     std::queue<ActiveInvocation> _invocations;
   };
@@ -42,6 +60,17 @@ namespace mignificient { namespace orchestrator {
   public:
 
       METHOD_LIST_BEGIN
+
+      /**
+       * The JSON should contain the following fields
+       * - Function name
+       * - Container name OR binary name
+       * - Username
+       * - Modules to load
+       * - MIG size
+       * - GPU mem allocation
+       }
+       */
       ADD_METHOD_TO(HTTPServer::invoke, "/invoke", drogon::Post);
       METHOD_LIST_END
 

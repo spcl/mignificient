@@ -23,7 +23,7 @@ namespace mignificient { namespace orchestrator {
     resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
     resp->setBody(result);
 
-    _trigger.trigger(ActiveInvocation{resp, input});
+    _trigger.trigger({resp, input});
 
     // Send the response
     callback(resp);
