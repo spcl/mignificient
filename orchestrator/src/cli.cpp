@@ -11,11 +11,11 @@
 int main(int argc, char ** argv)
 {
 
-  if(argc != 2) {
+  if(argc != 3) {
     return 1;
   }
 
-  spdlog::info("Reading configuration from {}", argv[1]);
+  spdlog::info("Reading configuration from {}, device database from {}", argv[1], argv[2]);
 
   Json::Value config;
   {
@@ -34,10 +34,8 @@ int main(int argc, char ** argv)
     }
   }
 
-  std::cerr << config << std::endl;
-
   mignificient::orchestrator::Orchestrator::init(config);
-  mignificient::orchestrator::Orchestrator orchestrator{config};
+  mignificient::orchestrator::Orchestrator orchestrator{config, argv[2]};
 
   orchestrator.run();
 

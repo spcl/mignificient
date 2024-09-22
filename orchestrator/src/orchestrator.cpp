@@ -33,7 +33,8 @@ namespace mignificient { namespace orchestrator {
     );
   }
 
-  Orchestrator::Orchestrator(const Json::Value& config)
+  Orchestrator::Orchestrator(const Json::Value& config, const std::string& device_db_path):
+    _gpu_manager(device_db_path, sharing_model(config["sharing-model"].asString()))
   {
     _waitset_ptr = &_waitset;
 

@@ -6,9 +6,9 @@
 
 #include <sched.h>
 
-#include <mignificient/orchestrator/device.hpp>
-
 namespace mignificient { namespace orchestrator {
+
+  class GPUInstance;
 
   class GPUlessServer {
 
@@ -16,24 +16,35 @@ namespace mignificient { namespace orchestrator {
 
   class Executor {
   public:
-      Executor(std::string userName, pid_t pid, std::string functionName, std::shared_ptr<GPUDevice> boundDevice)
-          : userName_(std::move(userName)), pid_(pid), functionName_(std::move(functionName)), boundDevice_(std::move(boundDevice)) {}
+      Executor(const std::string& user, const std::string& function, GPUInstance& device):
+        _user(user),
+        _pid(0),
+        _function(function),
+        _device(device)
+      {}
 
       virtual ~Executor() = default;
 
-      const std::string& getUserName() const { return userName_; }
+      void start()
+      {
+        // spawn!
+      }
 
-      pid_t getPID() const { return pid_; }
+      const std::string& user() const
+      {
+        return _user;
+      }
 
-      const std::string& getFunctionName() const { return functionName_; }
-
-      std::shared_ptr<GPUDevice> getBoundDevice() const { return boundDevice_; }
+      pid_t pid() const
+      {
+        return _pid;
+      }
 
   private:
-      std::string _userName;
+      std::string _user;
       pid_t _pid;
-      std::string _functionName;
-      std::shared_ptr<GPUDevice> _boundDevice;
+      std::string _function;
+      GPUInstance& _device;
   };
 
   class BareMetalExecutor : public Executor {
@@ -43,7 +54,7 @@ namespace mignificient { namespace orchestrator {
 
   class SarusContainerExecutor : public Executor {
   public:
-      using Executor::ActiveExecutor;
+      using Executor::Executor;
   };
 
 }}

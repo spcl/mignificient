@@ -11,6 +11,7 @@
 #include <json/value.h>
 
 #include <mignificient/orchestrator/client.hpp>
+#include <mignificient/orchestrator/device.hpp>
 #include <mignificient/orchestrator/invocation.hpp>
 #include <mignificient/orchestrator/http.hpp>
 #include <unordered_set>
@@ -20,7 +21,7 @@ namespace mignificient { namespace orchestrator {
   struct Orchestrator {
 
     static void init(const Json::Value& config);
-    Orchestrator(const Json::Value& value);
+    Orchestrator(const Json::Value& config, const std::string& device_db_path);
 
     Client* client(int id);
     void add_client();
@@ -51,6 +52,8 @@ namespace mignificient { namespace orchestrator {
     Context _http_context;
 
     HTTPTrigger _http_trigger;
+
+    GPUManager _gpu_manager;
 
   };
 

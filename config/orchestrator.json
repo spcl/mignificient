@@ -1,5 +1,6 @@
 {
   "name": "mignificient-orchestrator",
+  "sharing-model": "sequential",
   "http": {
     "port": 10000,
     "threads": 1
