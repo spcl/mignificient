@@ -1,7 +1,7 @@
-
 #include <mignificient/orchestrator/http.hpp>
 
 #include <drogon/drogon.h>
+#include <drogon/HttpTypes.h>
 
 namespace mignificient { namespace orchestrator {
 
@@ -12,21 +12,7 @@ namespace mignificient { namespace orchestrator {
     auto body = req->getBody();
     std::string input(body.data(), body.length());
 
-    // Process the invocation
-    //std::string result = process_invocation(input);
-    std::string result = "res";
-
-
-    // Create the response
-    auto resp = drogon::HttpResponse::newHttpResponse();
-    resp->setStatusCode(drogon::k200OK);
-    resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
-    resp->setBody(result);
-
-    _trigger.trigger({resp, input});
-
-    // Send the response
-    callback(resp);
+    _trigger.trigger({callback, input});
   }
 
   HTTPServer::HTTPServer(Json::Value & config, HTTPTrigger& trigger):

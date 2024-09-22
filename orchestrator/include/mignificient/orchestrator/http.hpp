@@ -69,7 +69,6 @@ namespace mignificient { namespace orchestrator {
        * - Modules to load
        * - MIG size
        * - GPU mem allocation
-       }
        */
       ADD_METHOD_TO(HTTPServer::invoke, "/invoke", drogon::Post);
       METHOD_LIST_END
