@@ -1,0 +1,15 @@
+{
+  "name": "mignificient-orchestrator",
+  "sharing-model": "sequential",
+  "http": {
+    "port": 10000,
+    "threads": 1
+  },
+  "executor": {
+    "type": "bare-metal",
+    "bare-metal-executor": {
+      "cpp": "${BARE_METAL_EXECUTOR_CPP}",
+      "python": ${BARE_METAL_EXECUTOR_PYTHON}
+    }
+  }
+}

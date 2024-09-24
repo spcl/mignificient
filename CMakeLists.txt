@@ -75,3 +75,8 @@ add_subdirectory(gpuless)
 add_subdirectory(executor)
 
 add_subdirectory(orchestrator)
+
+configure_file(
+  ${CMAKE_SOURCE_DIR}/config/orchestrator.json.in
+  ${CMAKE_BINARY_DIR}/config/orchestrator.json
+)
