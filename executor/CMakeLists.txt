@@ -27,9 +27,10 @@ target_link_libraries(executor_cpp
 )
 set_target_properties(executor_cpp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin/)
 
+set(BARE_METAL_EXECUTOR_CPP ${CMAKE_BINARY_DIR}/executor/bin/executor_cpp PARENT_SCOPE)
+
 find_package(Python COMPONENTS Interpreter Development)
 find_package(pybind11 CONFIG)
-
 
 if(Python_FOUND AND pybind11_FOUND)
 
@@ -44,8 +45,11 @@ if(Python_FOUND AND pybind11_FOUND)
     configure_file(python/__init__.py ${CMAKE_CURRENT_BINARY_DIR}/mignificient/__init__.py COPYONLY)
 
     configure_file(python/cli.py ${CMAKE_CURRENT_BINARY_DIR}/bin/executor_python.py COPYONLY)
+
+    set(BARE_METAL_EXECUTOR_PYTHON "[${Python_EXECUTABLE}, ${CMAKE_BINARY_DIR}/executor/bin/python/executor_python.py" PARENT_SCOPE)
 else()
     message(STATUS "NOT building Python executor.")
     message("Python found? ${Python_FOUND}")
     message("Pybind11 found? ${pybind11_FOUND}")
+    set(BARE_METAL_EXECUTOR_PYTHON "null" PARENT_SCOPE)
 endif()
