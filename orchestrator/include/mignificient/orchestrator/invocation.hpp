@@ -42,8 +42,10 @@ namespace mignificient { namespace orchestrator {
         }
 
         try {
+          _input_payload = input_data["input-payload"].asString();
           _function_name = input_data["function"].asString();
           _container = input_data["container"].asString();
+          _function_path = input_data["function-path"].asString();
           _user = input_data["user"].asString();
 
           int i = 0;
@@ -84,6 +86,16 @@ namespace mignificient { namespace orchestrator {
         return _function_name;
       }
 
+      const std::string& function_path() const
+      {
+        return _function_path;
+      }
+
+      const std::string& input() const
+      {
+        return _input_payload;
+      }
+
       const std::string& user() const
       {
         return _user;
@@ -92,7 +104,9 @@ namespace mignificient { namespace orchestrator {
   private:
       std::function<void(const drogon::HttpResponsePtr&)> _http_callback;
 
+      std::string _input_payload;
       std::string _function_name;
+      std::string _function_path;
       std::string _container;
       std::string _user;
       std::string _mig_instance;
