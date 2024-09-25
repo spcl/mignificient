@@ -51,6 +51,7 @@ if(NOT Drogon_FOUND)
   FetchContent_Declare(Drogon
     GIT_REPOSITORY https://github.com/drogonframework/drogon
     PATCH_COMMAND ${drogon_patch}
+    UPDATE_DISCONNECTED 1
   )
   set(BUILD_TESTING OFF CACHE INTERNAL "Turn off tests")
   set(BUILD_SQLITE OFF CACHE INTERNAL "Turn off sqlite")
