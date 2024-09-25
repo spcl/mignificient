@@ -57,8 +57,10 @@ namespace mignificient { namespace orchestrator {
 
           spdlog::error("Allocate a new client {} for user {}", client_id, username);
 
-          //auto gpulessServer = std::make_shared<GpulessServer>(/* parameters */);
-          // FIXME: select here contaienr
+          auto gpuless_server = std::make_shared<GPUlessServer>();
+          gpuless_server->start(client_id, _gpu_manager.get_free_gpu(), _config["poll-gpuless_sleep"].asBool(), _config["bare-metal-executor"]);
+
+          // FIXME: select here container
           // FIXME: select here language
           auto executor = std::make_shared<BareMetalExecutorCpp>(client_id, fname, invocation.function_path(), _gpu_manager.get_free_gpu(), _config["bare-metal-executor"]);
           executor->start(_config["poll-sleep"].asBool());

@@ -23,7 +23,12 @@ namespace mignificient { namespace orchestrator {
   class GPUInstance;
 
   class GPUlessServer {
+  public:
 
+    bool start(const std::string& user_id, GPUInstance& instance, bool poll_sleep, const Json::Value& config);
+
+  private:
+    pid_t _pid;
   };
 
   enum class Language {
@@ -95,12 +100,6 @@ namespace mignificient { namespace orchestrator {
       {}
 
       virtual ~Executor() = default;
-
-      void start()
-      {
-        // FIXME spawn!
-        //./gpuless/manager_device GPU-bbf7a28e-fe16-398c-9332-05d7e0a6e869 shmem test-app wait
-      }
 
       const std::string& user() const
       {
