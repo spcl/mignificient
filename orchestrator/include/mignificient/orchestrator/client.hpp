@@ -34,12 +34,29 @@ namespace mignificient { namespace orchestrator {
           "Send"
         }
       ),
+      _gpuless_send(
+        iox::capro::ServiceDescription{
+          iox::RuntimeName_t{iox::cxx::TruncateToCapacity_t{}, fmt::format("gpuless-{}", id)},
+          "Orchestrator",
+          "Receive"
+        }
+      ),
+      _gpuless_recv(
+        iox::capro::ServiceDescription{
+          iox::RuntimeName_t{iox::cxx::TruncateToCapacity_t{}, fmt::format("gpuless-{}", id)},
+          "Orchestrator",
+          "Send"
+        }
+      ),
       _payload(
         _send.loan().value()
       ),
+      _gpuless_payload(
+        _gpuless_send.loan().value()
+      ),
       _event_context{EventSource::CLIENT, this}
     {
-      _payload = _send.loan().value();
+      //_payload = _send.loan().value();
     }
 
     executor::Invocation& request()
@@ -60,6 +77,11 @@ namespace mignificient { namespace orchestrator {
       return _recv;
     }
 
+    iox::popo::Subscriber<int>& gpuless_subscriber()
+    {
+      return _gpuless_recv;
+    }
+
     Context* context()
     {
       return &_event_context;
@@ -75,24 +97,34 @@ namespace mignificient { namespace orchestrator {
       return _id;
     }
 
-    void setBusy(bool busy)
+    void set_busy(bool busy)
     {
       _busy = busy;
     }
 
-    bool isBusy() const
+    bool is_busy() const
     {
       return _busy;
     }
 
-    void setGpulessServer(std::shared_ptr<GPUlessServer> server)
+    void set_active()
+    {
+      _active = true;
+    }
+
+    bool is_active() const
+    {
+      return _active;
+    }
+
+    void set_gpuless_server(GPUlessServer&& server)
     {
       _gpulessServer = server;
     }
 
     void setExecutor(std::shared_ptr<Executor> executor)
     {
-      _executor = executor;
+      _executor = std::move(executor);
     }
 
     void add_pending_invocation(ActiveInvocation&& invoc)
@@ -146,11 +178,31 @@ namespace mignificient { namespace orchestrator {
       _active = true;
     }
 
+    void executor_active()
+    {
+      _executor_active = true;
+
+      if(_gpuless_active) {
+        send_all_pending();
+      }
+    }
+
+    void gpuless_active()
+    {
+      _gpuless_active = true;
+
+      if(_executor_active) {
+        send_all_pending();
+      }
+    }
+
   private:
     Context _event_context;
 
     int _invoc_idx = 0;
     bool _busy = false;
+    bool _executor_active = false;
+    bool _gpuless_active = false;
     std::atomic<bool> _active = false;
 
     std::string _id;
@@ -158,7 +210,11 @@ namespace mignificient { namespace orchestrator {
     iox::popo::Publisher<mignificient::executor::Invocation> _send;
     iox::popo::Subscriber<mignificient::executor::InvocationResult> _recv;
 
-    std::shared_ptr<GPUlessServer> _gpulessServer;
+    iox::popo::Publisher<int> _gpuless_send;
+    iox::popo::Subscriber<int> _gpuless_recv;
+    iox::popo::Sample<int, iox::mepoo::NoUserHeader> _gpuless_payload;
+
+    GPUlessServer _gpulessServer;
     std::shared_ptr<Executor> _executor;
 
     // FIXME: pointers would likely work better here due to excessive moving
@@ -170,7 +226,7 @@ namespace mignificient { namespace orchestrator {
     //std::unordered_multimap<std::string, std::shared_ptr<Executor>> warmContainers_;
     //std::unordered_multimap<std::string, std::shared_ptr<Executor>> lukewarmContainers_;
 
-    //std::vector<std::shared_ptr<SarusContainerExecutor>> getContainers(
+    //std::vector<std::shared_ptr<SarusContainerExecutor>> getContainers(k
     //    const std::unordered_multimap<std::string, std::shared_ptr<SarusContainerExecutor>>& map,
     //    const std::string& functionName) const {
     //    std::vector<std::shared_ptr<SarusContainerExecutor>> containers;

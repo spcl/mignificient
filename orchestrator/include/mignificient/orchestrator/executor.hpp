@@ -22,6 +22,18 @@ namespace mignificient { namespace orchestrator {
 
   class GPUInstance;
 
+  enum class GPUlessMessage {
+
+    NO_EXEC = 0,
+    MEMCPY_ONLY = 1,
+    FULL_EXEC = 2,
+    SWAP_OFF = 3,
+    SWAP_IN = 4,
+
+    REGISTER = 10,
+    SWAP_OFF_CONFIRM = 11
+  };
+
   class GPUlessServer {
   public:
 

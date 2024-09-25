@@ -40,7 +40,7 @@ namespace mignificient { namespace orchestrator {
             for (auto& client : it->second) {
 
                 if (client->fname() == fname) {
-                    if (!client->isBusy()) {
+                    if (!client->is_busy()) {
                         selected_client = client.get();
                         spdlog::error("Using an existing client {} for user {}", selected_client->id(), username);
                         break;
@@ -57,16 +57,16 @@ namespace mignificient { namespace orchestrator {
 
           spdlog::error("Allocate a new client {} for user {}", client_id, username);
 
-          auto gpuless_server = std::make_shared<GPUlessServer>();
-          gpuless_server->start(client_id, _gpu_manager.get_free_gpu(), _config["poll-gpuless_sleep"].asBool(), _config["bare-metal-executor"]);
+          GPUlessServer gpuless_server;
+          gpuless_server.start(client_id, _gpu_manager.get_free_gpu(), _config["poll-gpuless-sleep"].asBool(), _config["bare-metal-executor"]);
 
           // FIXME: select here container
           // FIXME: select here language
           auto executor = std::make_shared<BareMetalExecutorCpp>(client_id, fname, invocation.function_path(), _gpu_manager.get_free_gpu(), _config["bare-metal-executor"]);
           executor->start(_config["poll-sleep"].asBool());
 
-          //new_client.setGpulessServer(gpulessServer);
-          //new_client.setExecutor(executor);
+          new_client->set_gpuless_server(std::move(gpuless_server));
+          new_client->setExecutor(std::move(executor));
 
           selected_client = new_client.get();
           clients.push_back(selected_client);

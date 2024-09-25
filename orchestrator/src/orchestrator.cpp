@@ -1,4 +1,5 @@
 
+#include <mignificient/orchestrator/executor.hpp>
 #include <mignificient/orchestrator/orchestrator.hpp>
 
 #include <drogon/drogon.h>
@@ -19,6 +20,24 @@ namespace mignificient { namespace orchestrator {
   iox::popo::WaitSet<>* Orchestrator::_waitset_ptr;
   std::shared_ptr<HTTPServer> Orchestrator::_http_server;
 
+  void handle_gpuless(iox::popo::Subscriber<int>* sub, Client* client)
+  {
+    while(client->gpuless_subscriber().hasData()) {
+
+      auto res = client->gpuless_subscriber().take();
+
+      if(*res.value().get() == static_cast<int>(GPUlessMessage::REGISTER)) {
+        spdlog::error("Received registration from gpuless server {}", client->id());
+        client->gpuless_active();
+      } else if(*res.value().get() == static_cast<int>(GPUlessMessage::SWAP_OFF_CONFIRM)) {
+        // FIXME: implement
+      } else {
+        spdlog::error("Received unknown message from gpuless server, code: {}", *res.value().get());
+      }
+
+    }
+  }
+
   void handle_client(iox::popo::Subscriber<mignificient::executor::InvocationResult>* sub, Client* client)
   {
     while(client->subscriber().hasData()) {
@@ -32,7 +51,7 @@ namespace mignificient { namespace orchestrator {
       } else if (res.value().get()->msg == executor::Message::YIELD) {
         spdlog::info("Yield {}");
       } else {
-        client->send_all_pending();
+        client->executor_active();
       }
     }
   }
@@ -44,6 +63,17 @@ namespace mignificient { namespace orchestrator {
 
     auto clients = this_ptr->_users.process_invocations(invocations);
     for(auto client : clients) {
+
+      this_ptr->_waitset.attachEvent(
+        client->gpuless_subscriber(),
+        iox::popo::SubscriberEvent::DATA_RECEIVED,
+        createNotificationCallback(handle_gpuless, *client)
+      ).or_else(
+        [](auto) {
+          spdlog::error("Failed to attach subscriber");
+          std::exit(EXIT_FAILURE);
+        }
+      );
 
       this_ptr->_waitset.attachEvent(
           client->subscriber(),

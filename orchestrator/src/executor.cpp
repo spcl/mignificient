@@ -8,7 +8,7 @@ namespace mignificient { namespace orchestrator {
   {
     std::string gpuless_mgr = config["gpuless-exec"].asString();
     std::string app_name = fmt::format("server-{}", user_id);
-    std::string poll_type = fmt::format("POLL_TYPE={}", poll_sleep ? "wait" : "poll");
+    std::string poll_type = poll_sleep ? "wait" : "poll";
     char* argv[] = {
       const_cast<char*>(gpuless_mgr.c_str()),
       const_cast<char*>(instance.uuid().c_str()),
