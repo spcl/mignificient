@@ -8,10 +8,12 @@
   "executor": {
     "type": "bare-metal",
     "poll-sleep": true,
+    "poll-gpuless-sleep": true,
     "bare-metal-executor": {
       "cpp": "${BARE_METAL_EXECUTOR_CPP}",
       "python": ${BARE_METAL_EXECUTOR_PYTHON},
-      "gpuless-lib": "${CMAKE_BINARY_DIR}/gpuless/libgpuless.so"
+      "gpuless-lib": "${CMAKE_BINARY_DIR}/gpuless/libgpuless.so",
+      "gpuless-exec": "${CMAKE_BINARY_DIR}/gpuless/manager_device"
     }
   }
 }
