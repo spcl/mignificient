@@ -19,14 +19,43 @@ namespace mignificient { namespace orchestrator {
   iox::popo::WaitSet<>* Orchestrator::_waitset_ptr;
   std::shared_ptr<HTTPServer> Orchestrator::_http_server;
 
+  void handle_client(iox::popo::Subscriber<mignificient::executor::InvocationResult>* sub, Client* client)
+  {
+    while(client->subscriber().hasData()) {
+
+      auto res = client->subscriber().take();
+
+      if(res.value().get()->msg == executor::Message::FINISH) {
+        spdlog::info("Finish {}", std::string_view{reinterpret_cast<const char*>(res.value().get()->data.data()), res.value().get()->size});
+      } else if (res.value().get()->msg == executor::Message::YIELD) {
+        spdlog::info("Yield {}");
+      } else {
+        client->send_all_pending();
+      }
+    }
+  }
+
   void Orchestrator::_handle_http(iox::popo::UserTrigger*, Orchestrator* this_ptr)
   {
     auto invocations = this_ptr->_http_trigger.get_invocations();
     SPDLOG_DEBUG("Received new invocation!");
 
-    this_ptr->_users.process_invocations(invocations);
-  }
+    auto clients = this_ptr->_users.process_invocations(invocations);
+    for(auto client : clients) {
 
+      this_ptr->_waitset.attachEvent(
+          client->subscriber(),
+          iox::popo::SubscriberEvent::DATA_RECEIVED,
+          createNotificationCallback(handle_client, *client)
+      ).or_else(
+        [](auto) {
+          spdlog::error("Failed to attach subscriber");
+          std::exit(EXIT_FAILURE);
+        }
+      );
+
+    }
+  }
 
   void Orchestrator::init(const Json::Value& config)
   {
@@ -36,7 +65,8 @@ namespace mignificient { namespace orchestrator {
   }
 
   Orchestrator::Orchestrator(const Json::Value& config, const std::string& device_db_path):
-    _gpu_manager(device_db_path, sharing_model(config["sharing-model"].asString()))
+    _gpu_manager(device_db_path, sharing_model(config["sharing-model"].asString())),
+    _users(_gpu_manager, config["executor"])
   {
     _waitset_ptr = &_waitset;
 
@@ -79,17 +109,6 @@ namespace mignificient { namespace orchestrator {
       Orchestrator::_http_server->shutdown();
     }
 
-  }
-
-  void handle_client(iox::popo::Subscriber<mignificient::executor::InvocationResult>* sub, Client* client)
-  {
-    auto res = client->subscriber().take();
-
-    if(res.value().get()->msg == executor::Message::FINISH) {
-      spdlog::info("Finish {}", std::string_view{reinterpret_cast<const char*>(res.value().get()->data.data()), res.value().get()->size});
-    } else {
-      spdlog::info("Yield {}");
-    }
   }
 
   void Orchestrator::add_client()

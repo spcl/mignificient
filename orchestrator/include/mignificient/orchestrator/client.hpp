@@ -1,12 +1,16 @@
 #ifndef __MIGNIFICIENT_ORCHESTRATOR_CLIENT_HPP__
 #define __MIGNIFICIENT_ORCHESTRATOR_CLIENT_HPP__
 
+#include <queue>
+
 #include <iceoryx_posh/popo/subscriber.hpp>
 #include <iceoryx_posh/popo/publisher.hpp>
+#include <iceoryx_posh/popo/untyped_publisher.hpp>
 
 #include <mignificient/executor/executor.hpp>
 #include <mignificient/orchestrator/event.hpp>
 #include <mignificient/orchestrator/executor.hpp>
+#include <mignificient/orchestrator/invocation.hpp>
 
 namespace mignificient { namespace orchestrator {
 
@@ -35,30 +39,17 @@ namespace mignificient { namespace orchestrator {
       ),
       _event_context{EventSource::CLIENT, this}
     {
-      //_payload = _send.loan(sizeof(executor::Invocation), alignof(executor::Invocation)).value();
-      //_payload = _send.loan().value();
-    }
-
-    Client(Client&& obj) = default;
-
-    ~Client()
-    {
-      //_send.release(_payload);
+      _payload = _send.loan().value();
     }
 
     executor::Invocation& request()
     {
-      //return *static_cast<executor::Invocation*>(_payload);
       return *_payload;
     }
 
     void send_request()
     {
       _send.publish(std::move(_payload));
-      //_payload = _send.loan(
-      //  sizeof(executor::Invocation),
-      //  alignof(executor::Invocation)
-      //).value();
       _payload = _send.loan().value();
     }
 
@@ -104,10 +95,52 @@ namespace mignificient { namespace orchestrator {
       _executor = executor;
     }
 
+    void add_pending_invocation(ActiveInvocation&& invoc)
+    {
+      _pending_invocations.push(invoc);
+    }
+
+    void send(ActiveInvocation& invoc)
+    {
+      if(!_active) {
+        add_pending_invocation(std::move(invoc));
+        return;
+      }
+
+      request().id = iox::cxx::string<64>{iox::cxx::TruncateToCapacity, std::to_string(_invoc_idx++)};
+      request().data.resize(invoc.input().size());
+      std::copy_n(invoc.input().begin(), invoc.input().size(), request().data.data());
+      request().size = invoc.input().size();
+
+      send_request();
+    }
+
+    void send_all_pending()
+    {
+      while(!_pending_invocations.empty()) {
+
+        auto& invoc = _pending_invocations.front();
+
+        request().id = iox::cxx::string<64>{iox::cxx::TruncateToCapacity, std::to_string(_invoc_idx++)};
+        request().data.resize(invoc.input().size());
+        std::copy_n(invoc.input().begin(), invoc.input().size(), request().data.data());
+        request().size = invoc.input().size();
+
+        send_request();
+        _pending_invocations.pop();
+
+      }
+
+      _active = true;
+    }
+
   private:
     Context _event_context;
 
+    int _invoc_idx = 0;
     bool _busy = false;
+    std::atomic<bool> _active = false;
+
     std::string _id;
     std::string _fname;
     iox::popo::Publisher<mignificient::executor::Invocation> _send;
@@ -115,6 +148,8 @@ namespace mignificient { namespace orchestrator {
 
     std::shared_ptr<GPUlessServer> _gpulessServer;
     std::shared_ptr<Executor> _executor;
+
+    std::queue<ActiveInvocation> _pending_invocations;
 
     iox::popo::Sample<mignificient::executor::Invocation, iox::mepoo::NoUserHeader> _payload;
 
