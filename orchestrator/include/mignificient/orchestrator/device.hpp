@@ -111,6 +111,11 @@ namespace mignificient { namespace orchestrator {
       return _memory;
     }
 
+    std::vector<GPUInstance>& instances()
+    {
+      return _mig_instances;
+    }
+
   private:
     std::string _uuid;
     float _memory;
@@ -122,6 +127,12 @@ namespace mignificient { namespace orchestrator {
   public:
 
     GPUManager(const std::string& devices_data_path, SharingModel sharing_model);
+
+    GPUInstance& get_free_gpu()
+    {
+      // FIXME: add selection logic
+      return _devices[0].instances()[0];
+    }
 
   private:
     std::vector<GPUDevice> _devices;
