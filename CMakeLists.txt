@@ -39,12 +39,18 @@ endif()
 ###
 # drogon
 ###
+
+
 find_package(Drogon QUIET)
 if(NOT Drogon_FOUND)
 	set(JsonCpp_DIR ${jsoncpp_BINARY_DIR} CACHE PATH "JsonCpp directory" FORCE)
+
+  set(drogon_patch git apply ${CMAKE_CURRENT_SOURCE_DIR}/external/drogon.patch)
+
   message(STATUS "Downloading and building drogon dependency")
   FetchContent_Declare(Drogon
     GIT_REPOSITORY https://github.com/drogonframework/drogon
+    PATCH_COMMAND ${drogon_patch}
   )
   set(BUILD_TESTING OFF CACHE INTERNAL "Turn off tests")
   set(BUILD_SQLITE OFF CACHE INTERNAL "Turn off sqlite")

@@ -1,0 +1,16 @@
+diff --git a/lib/inc/drogon/HttpResponse.h b/lib/inc/drogon/HttpResponse.h
+index 620577e5..de4936bd 100644
+--- a/lib/inc/drogon/HttpResponse.h
++++ b/lib/inc/drogon/HttpResponse.h
+@@ -303,6 +303,11 @@ class DROGON_EXPORT HttpResponse
+         setBody(body, N - 1);
+     }
+ 
++    void setViewBody(const char* body, int N)
++    {
++        setBody(body, N);
++    }
++
+     /// Get the response body.
+     std::string_view body() const
+     {
