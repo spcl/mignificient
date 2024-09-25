@@ -31,7 +31,7 @@ gpus_json="[]"
 while IFS= read -r line; do
     if [[ $line =~ GPU[[:space:]]([0-9]+):.*(UUID:[[:space:]]GPU-([a-f0-9-]+)) ]]; then
         gpu_index="${BASH_REMATCH[1]}"
-        gpu_uuid="${BASH_REMATCH[3]}"
+        gpu_uuid="GPU-${BASH_REMATCH[3]}"
         
         # Get GPU memory and compute capability
         gpu_memory=$(get_gpu_memory $gpu_index)
@@ -52,7 +52,7 @@ while IFS= read -r line; do
 
               if [[ $mig_line =~ MIG[[:space:]]([0-9]+g\.[0-9]+gb).*UUID:[[:space:]]([A-Za-z0-9-]+) ]]; then
                   mig_size="${BASH_REMATCH[1]}"
-                  mig_uuid="${BASH_REMATCH[2]}"
+                  mig_uuid="MIG-${BASH_REMATCH[2]}"
                   
                   # Calculate approximate compute units and memory
                   case $mig_size in
@@ -79,6 +79,8 @@ while IFS= read -r line; do
             '. += [{uuid: $uuid, index: ($index|tonumber), memory: ($memory|tonumber), compute_capability: $compute_capability, instances: $instances}]')
     fi
 done <<< "$gpu_info"
+
+final_json=$(jq -n --argjson gpus "$gpus_json" '{gpus: $gpus}')
 
 # Save to output file
 echo $final_json | jq '.' > "${output_dir}/devices.json"
