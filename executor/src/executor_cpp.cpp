@@ -12,6 +12,7 @@ int main(int argc, char **argv) {
   std::string container_name{std::getenv("CONTAINER_NAME")};
 
   mignificient::executor::Runtime runtime{container_name};
+  runtime.register_runtime();
 
   typedef size_t (*fptr)(mignificient::Invocation);
   fptr func;
@@ -38,7 +39,9 @@ int main(int argc, char **argv) {
       std::cerr << "Empty payload, quit" << std::endl;
       break;
     }
-    spdlog::info("Invoke, data size {}, first element {}", invocation_data.size, invocation_data.data[0]);
+
+    std::string_view input{reinterpret_cast<const char*>(invocation_data.data), invocation_data.size};
+    spdlog::info("Invoke, data size {}, input string {}", invocation_data.size, input);
 
     size_t size = func({runtime, std::move(invocation_data), runtime.result()});
 
@@ -48,9 +51,12 @@ int main(int argc, char **argv) {
     std::string_view res{"{ \"test\": 42 }"};
 
     std::copy_n(res.data(), res.length(), reinterpret_cast<char*>(runtime.result().data));
-    //runtime.result().size = res.length();
 
     runtime.finish(res.length());
+    spdlog::info("Finished invocation ");
+
+    std::cout.flush();
+    std::cerr.flush();
 
   }
 

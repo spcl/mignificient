@@ -16,7 +16,7 @@ namespace mignificient { namespace executor {
 
   struct Invocation {
     static constexpr int CAPACITY = 5 * 1024 * 1024;
-    iox::cxx::vector<uint8_t, CAPACITY> data;
+    iox::cxx::vector<uint8_t, CAPACITY> data{CAPACITY};
     size_t size;
     iox::cxx::string<64> id;
   };
@@ -24,15 +24,16 @@ namespace mignificient { namespace executor {
   enum class Message {
 
     YIELD = 0,
-    FINISH = 1
+    FINISH = 1,
+    REGISTER = 2
 
   };
 
   struct InvocationResult {
     static constexpr int CAPACITY = 5 * 1024 * 1024;
+    Message msg;
     iox::cxx::vector<uint8_t, CAPACITY> data;
     size_t size;
-    Message msg;
   };
 
   struct Runtime {
@@ -42,6 +43,8 @@ namespace mignificient { namespace executor {
     InvocationData loop_wait();
 
     void gpu_yield();
+
+    void register_runtime();
 
     void finish(int size);
 
@@ -57,6 +60,7 @@ namespace mignificient { namespace executor {
     std::optional<iox::posix::SignalGuard> sigterm;
 
     std::optional<iox::popo::Sample<InvocationResult, iox::mepoo::NoUserHeader>> _result;
+    std::optional<iox::popo::Sample<InvocationResult, iox::mepoo::NoUserHeader>> _yield_msg;
 
     const void* last_message;
 

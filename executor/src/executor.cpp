@@ -4,6 +4,7 @@
 #include <iceoryx_hoofs/posix_wrapper/signal_watcher.hpp>
 #include <iceoryx_hoofs/posix_wrapper/signal_handler.hpp>
 #include <iceoryx_posh/capro/service_description.hpp>
+#include <spdlog/spdlog.h>
 
 namespace mignificient { namespace executor {
 
@@ -37,14 +38,24 @@ namespace mignificient { namespace executor {
   
     sigint.emplace(iox::posix::registerSignalHandler(iox::posix::Signal::INT, _sigHandler));
     sigterm.emplace(iox::posix::registerSignalHandler(iox::posix::Signal::TERM, _sigHandler));
+
+    _yield_msg = std::move(client.value().loan().value());
+  }
+
+  void Runtime::register_runtime()
+  {
+    _result = std::move(client.value().loan().value());
+    _result.value()->msg = Message::REGISTER;
+    _result->publish();
   }
 
   void Runtime::gpu_yield()
   {
-    _result.value()->msg = Message::YIELD;
-    _result->publish();
+    _yield_msg.value()->msg = Message::YIELD;
+    _yield_msg->publish();
 
-    _result = std::move(client.value().loan().value());
+    _yield_msg.reset();
+    _yield_msg = std::move(client.value().loan().value());
   }
 
   InvocationData Runtime::loop_wait()
@@ -72,6 +83,7 @@ namespace mignificient { namespace executor {
           last_message = value.value();
           auto* ptr = static_cast<const Invocation*>(last_message);
 
+          _result.reset();
           _result = std::move(client.value().loan().value());
           _result.value()->size = 0;
           _result.value()->data.resize(InvocationResult::CAPACITY);
@@ -90,6 +102,7 @@ namespace mignificient { namespace executor {
     _result.value()->msg = Message::FINISH;
     _result->publish();
 
+    _result.reset();
     _result = std::move(client.value().loan().value());
   }
 
