@@ -51,6 +51,7 @@ namespace mignificient { namespace orchestrator {
       } else if (res.value().get()->msg == executor::Message::YIELD) {
         spdlog::info("Yield {}");
       } else {
+        spdlog::error("Received registration from gpuless executor {}", client->id());
         client->executor_active();
       }
     }

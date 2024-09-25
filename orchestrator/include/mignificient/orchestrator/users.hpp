@@ -72,6 +72,7 @@ namespace mignificient { namespace orchestrator {
           clients.push_back(selected_client);
         }
 
+        // FIXME: logic for checking when gpu is active or not
         selected_client->send(invocation);
 
       }

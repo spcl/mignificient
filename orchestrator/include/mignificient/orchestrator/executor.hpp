@@ -24,11 +24,12 @@ namespace mignificient { namespace orchestrator {
 
   enum class GPUlessMessage {
 
-    NO_EXEC = 0,
-    MEMCPY_ONLY = 1,
-    FULL_EXEC = 2,
-    SWAP_OFF = 3,
-    SWAP_IN = 4,
+    LOCK_DEVICE = 0,
+    BASIC_EXEC = 1,
+    MEMCPY_ONLY = 2,
+    FULL_EXEC = 3,
+    SWAP_OFF = 4,
+    SWAP_IN = 5,
 
     REGISTER = 10,
     SWAP_OFF_CONFIRM = 11

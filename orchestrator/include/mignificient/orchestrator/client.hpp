@@ -68,6 +68,15 @@ namespace mignificient { namespace orchestrator {
     {
       _send.publish(std::move(_payload));
       _payload = _send.loan().value();
+
+      spdlog::error("Send gpuless message");
+      send_gpuless_msg(GPUlessMessage::BASIC_EXEC);
+
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+      send_gpuless_msg(GPUlessMessage::MEMCPY_ONLY);
+
+      std::this_thread::sleep_for(std::chrono::seconds(3));
+      send_gpuless_msg(GPUlessMessage::FULL_EXEC);
     }
 
     const std::string& get_name() const { return _id; }
@@ -80,6 +89,14 @@ namespace mignificient { namespace orchestrator {
     iox::popo::Subscriber<int>& gpuless_subscriber()
     {
       return _gpuless_recv;
+    }
+
+    void send_gpuless_msg(GPUlessMessage msg)
+    {
+      *_gpuless_payload.get() = static_cast<int>(msg);
+
+      _gpuless_send.publish(std::move(_gpuless_payload));
+      _gpuless_payload = std::move(_gpuless_send.loan().value());
     }
 
     Context* context()
