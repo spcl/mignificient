@@ -19,11 +19,14 @@ namespace mignificient { namespace orchestrator {
   iox::popo::WaitSet<>* Orchestrator::_waitset_ptr;
   std::shared_ptr<HTTPServer> Orchestrator::_http_server;
 
-  void handle_http(iox::popo::UserTrigger*, HTTPTrigger* trigger)
+  void Orchestrator::_handle_http(iox::popo::UserTrigger*, Orchestrator* this_ptr)
   {
-    auto invocations = trigger->get_invocations();
+    auto invocations = this_ptr->_http_trigger.get_invocations();
     SPDLOG_DEBUG("Received new invocation!");
+
+    this_ptr->_users.process_invocations(invocations);
   }
+
 
   void Orchestrator::init(const Json::Value& config)
   {
@@ -45,7 +48,7 @@ namespace mignificient { namespace orchestrator {
 
     _waitset.attachEvent(
         _http_trigger.iceoryx_trigger(),
-        iox::popo::createNotificationCallback(handle_http, _http_trigger)
+        iox::popo::createNotificationCallback(Orchestrator::_handle_http, *this)
     ).or_else(
       [](auto) {
         spdlog::error("Failed to attach subscriber");
@@ -91,29 +94,29 @@ namespace mignificient { namespace orchestrator {
 
   void Orchestrator::add_client()
   {
-    std::string client_name = fmt::format("client_{}", _client_id);
+    //std::string client_name = fmt::format("client_{}", _client_id);
 
-    const auto & [client, _] = clients.emplace(
-      std::piecewise_construct,
-      std::forward_as_tuple(_client_id),
-      std::forward_as_tuple(client_name)
-    );
+    //const auto & [client, _] = clients.emplace(
+    //  std::piecewise_construct,
+    //  std::forward_as_tuple(_client_id),
+    //  std::forward_as_tuple(client_name)
+    //);
 
-    //_waitset.attachState(client->second.subscriber(), iox::popo::SubscriberEvent::DATA_RECEIVED, _client_id).or_else([](auto) {
-    _waitset.attachEvent(
-        client->second.subscriber(),
-        //*client,
-        iox::popo::SubscriberEvent::DATA_RECEIVED,
-        //0,
-        createNotificationCallback(handle_client, client->second)//client->second.context())
-    ).or_else(
-      [](auto) {
-        spdlog::error("Failed to attach subscriber");
-        std::exit(EXIT_FAILURE);
-      }
-    );
+    ////_waitset.attachState(client->second.subscriber(), iox::popo::SubscriberEvent::DATA_RECEIVED, _client_id).or_else([](auto) {
+    //_waitset.attachEvent(
+    //    client->second.subscriber(),
+    //    //*client,
+    //    iox::popo::SubscriberEvent::DATA_RECEIVED,
+    //    //0,
+    //    createNotificationCallback(handle_client, client->second)//client->second.context())
+    //).or_else(
+    //  [](auto) {
+    //    spdlog::error("Failed to attach subscriber");
+    //    std::exit(EXIT_FAILURE);
+    //  }
+    //);
 
-    _client_id++;
+    //_client_id++;
   }
 
   Client* Orchestrator::client(int id)

@@ -36,6 +36,7 @@ namespace mignificient { namespace orchestrator {
         instance["memory"].asFloat(),
         instance["instance_size"].asString(),
         sharing_model
+        //instance
       );
     }
 
@@ -62,6 +63,7 @@ namespace mignificient { namespace orchestrator {
       throw std::runtime_error("Failed to parse JSON");
     }
 
+    int instance_index = 0;
     const Json::Value& gpus = device_data["gpus"];
     for (const auto& gpu : gpus) {
       _devices.emplace_back(gpu, sharing_model);

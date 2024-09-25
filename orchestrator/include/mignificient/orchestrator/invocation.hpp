@@ -79,6 +79,16 @@ namespace mignificient { namespace orchestrator {
 
       //drogon::HttpResponsePtr getResponse() const { return response_; }
 
+      const std::string& function_name() const
+      {
+        return _function_name;
+      }
+
+      const std::string& user() const
+      {
+        return _user;
+      }
+
   private:
       std::function<void(const drogon::HttpResponsePtr&)> _http_callback;
 

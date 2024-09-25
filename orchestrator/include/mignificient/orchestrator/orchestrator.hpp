@@ -1,6 +1,7 @@
 #ifndef __MIGNIFICIENT_ORCHESTRATOR_ORCHESTRATOR_HPP__
 #define __MIGNIFICIENT_ORCHESTRATOR_ORCHESTRATOR_HPP__
 
+#include <mignificient/orchestrator/users.hpp>
 #include <optional>
 #include <queue>
 #include <unordered_map>
@@ -55,6 +56,9 @@ namespace mignificient { namespace orchestrator {
 
     GPUManager _gpu_manager;
 
+    Users _users;
+
+    static void _handle_http(iox::popo::UserTrigger*, Orchestrator* this_ptr);
   };
 
 }}
