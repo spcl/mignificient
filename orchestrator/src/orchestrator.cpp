@@ -27,6 +27,8 @@ namespace mignificient { namespace orchestrator {
 
       if(res.value().get()->msg == executor::Message::FINISH) {
         spdlog::info("Finish {}", std::string_view{reinterpret_cast<const char*>(res.value().get()->data.data()), res.value().get()->size});
+
+        client->finished(std::string_view{reinterpret_cast<const char*>(res.value().get()->data.data()), res.value().get()->size});
       } else if (res.value().get()->msg == executor::Message::YIELD) {
         spdlog::info("Yield {}");
       } else {

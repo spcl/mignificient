@@ -100,6 +100,15 @@ namespace mignificient { namespace orchestrator {
       _pending_invocations.push(invoc);
     }
 
+    void finished(std::string_view response)
+    {
+      auto& invoc = _active_invocations.front();
+
+      invoc.respond(response);
+
+      _active_invocations.pop();
+    }
+
     void send(ActiveInvocation& invoc)
     {
       if(!_active) {
@@ -113,6 +122,8 @@ namespace mignificient { namespace orchestrator {
       request().size = invoc.input().size();
 
       send_request();
+
+      _active_invocations.push(std::move(invoc));
     }
 
     void send_all_pending()
@@ -127,8 +138,9 @@ namespace mignificient { namespace orchestrator {
         request().size = invoc.input().size();
 
         send_request();
-        _pending_invocations.pop();
 
+        _active_invocations.push(std::move(invoc));
+        _pending_invocations.pop();
       }
 
       _active = true;
@@ -149,7 +161,9 @@ namespace mignificient { namespace orchestrator {
     std::shared_ptr<GPUlessServer> _gpulessServer;
     std::shared_ptr<Executor> _executor;
 
+    // FIXME: pointers would likely work better here due to excessive moving
     std::queue<ActiveInvocation> _pending_invocations;
+    std::queue<ActiveInvocation> _active_invocations;
 
     iox::popo::Sample<mignificient::executor::Invocation, iox::mepoo::NoUserHeader> _payload;
 

@@ -65,16 +65,18 @@ namespace mignificient { namespace orchestrator {
 
           _http_callback(resp);
         }
+      }
 
-        // Process the invocation
-        //std::string result = process_invocation(input);
-        std::string result = "res";
-
-        // Create the response
+      void respond(std::string_view response)
+      {
         auto resp = drogon::HttpResponse::newHttpResponse();
         resp->setStatusCode(drogon::k200OK);
         resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
-        resp->setBody(result);
+
+        // Zero-copy operation
+        resp->setViewBody(response.begin(), response.size());
+        // This one works with default implementation
+        //resp->setBody(std::string{response.begin(), response.size()});
 
         _http_callback(resp);
       }
