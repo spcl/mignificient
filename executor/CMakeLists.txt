@@ -46,7 +46,7 @@ if(Python_FOUND AND pybind11_FOUND)
 
     configure_file(python/cli.py ${CMAKE_CURRENT_BINARY_DIR}/bin/executor_python.py COPYONLY)
 
-    set(BARE_METAL_EXECUTOR_PYTHON "[${Python_EXECUTABLE}, ${CMAKE_BINARY_DIR}/executor/bin/python/executor_python.py" PARENT_SCOPE)
+    set(BARE_METAL_EXECUTOR_PYTHON "[\"${Python_EXECUTABLE}\", \"${CMAKE_BINARY_DIR}/executor/bin/python/executor_python.py\"]" PARENT_SCOPE)
 else()
     message(STATUS "NOT building Python executor.")
     message("Python found? ${Python_FOUND}")
