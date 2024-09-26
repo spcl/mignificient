@@ -64,7 +64,7 @@ namespace mignificient { namespace orchestrator {
     void add(char* env)
     {
       if(global_size + current_idx < envs.size()) {
-        envs[current_idx++] = env;
+        envs[global_size + current_idx++] = env;
       } else {
         envs.push_back(env);
         current_idx++;
@@ -165,6 +165,12 @@ namespace mignificient { namespace orchestrator {
       envs.add(const_cast<char*>(exec_type.c_str()));
       envs.add(const_cast<char*>(container_name.c_str()));
       envs.add(nullptr);
+
+      for(char* ptr : envs.vector()) {
+
+        if(ptr)
+          spdlog::error(ptr);
+      }
 
       posix_spawnattr_t attr;
       posix_spawn_file_actions_t file_actions;
