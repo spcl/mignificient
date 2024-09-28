@@ -8,7 +8,6 @@ namespace mignificient { namespace orchestrator {
   void HTTPServer::invoke(const drogon::HttpRequestPtr& req,
               std::function<void(const drogon::HttpResponsePtr&)>&& callback)
   {
-
     auto body = req->getBody();
     std::string input(body.data(), body.length());
 
@@ -22,6 +21,7 @@ namespace mignificient { namespace orchestrator {
     _trigger(trigger)
   {
     drogon::app().addListener("0.0.0.0", config["port"].asInt());
+    spdlog::info("Listening on port {}", config["port"].asInt());
 
     drogon::app().setThreadNum(config["threads"].asInt());
 
