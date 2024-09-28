@@ -12,7 +12,10 @@ namespace mignificient { namespace orchestrator {
     auto body = req->getBody();
     std::string input(body.data(), body.length());
 
-    _trigger.trigger({callback, input});
+    auto invoc = ActiveInvocation::create(callback, input);
+    if(invoc) {
+      _trigger.trigger(std::move(invoc));
+    }
   }
 
   HTTPServer::HTTPServer(Json::Value & config, HTTPTrigger& trigger):
