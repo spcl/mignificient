@@ -14,7 +14,16 @@
 
 namespace mignificient { namespace orchestrator {
 
-  struct Client {
+  enum class ClientStatus
+  {
+    NOT_ACTIVE,
+    CPU_ONLY,
+    MEMCPY,
+    FULL
+  };
+
+  struct Client
+  {
 
     Client(const std::string& id, const std::string& fname):
       _id(id),
@@ -55,28 +64,11 @@ namespace mignificient { namespace orchestrator {
         _gpuless_send.loan().value()
       ),
       _event_context{EventSource::CLIENT, this}
-    {
-      //_payload = _send.loan().value();
-    }
+    {}
 
     executor::Invocation& request()
     {
       return *_payload;
-    }
-
-    void send_request()
-    {
-      _send.publish(std::move(_payload));
-      _payload = _send.loan().value();
-
-      spdlog::error("Send gpuless message");
-      send_gpuless_msg(GPUlessMessage::BASIC_EXEC);
-
-      std::this_thread::sleep_for(std::chrono::seconds(1));
-      send_gpuless_msg(GPUlessMessage::MEMCPY_ONLY);
-
-      std::this_thread::sleep_for(std::chrono::seconds(3));
-      send_gpuless_msg(GPUlessMessage::FULL_EXEC);
     }
 
     const std::string& get_name() const { return _id; }
@@ -124,9 +116,9 @@ namespace mignificient { namespace orchestrator {
       return _busy;
     }
 
-    void set_active()
+    ClientStatus status() const
     {
-      _active = true;
+      return _status;
     }
 
     bool is_active() const
@@ -134,83 +126,85 @@ namespace mignificient { namespace orchestrator {
       return _active;
     }
 
-    void set_gpuless_server(GPUlessServer&& server)
+    GPUInstance* gpu_instance() const
     {
-      _gpulessServer = server;
+      assert(_gpu_instance);
+      return _gpu_instance;
     }
 
-    void setExecutor(std::shared_ptr<Executor> executor)
+    void set_gpuless_server(GPUlessServer&& server, GPUInstance* gpu_instance)
+    {
+      _gpuless_server = server;
+      _gpu_instance = gpu_instance;
+    }
+
+    void set_executor(std::unique_ptr<Executor> executor)
     {
       _executor = std::move(executor);
     }
 
-    void add_pending_invocation(ActiveInvocation&& invoc)
+    void add_invocation(std::unique_ptr<ActiveInvocation> && invoc)
     {
-      _pending_invocations.push(invoc);
+      _pending_invocations.push(std::move(invoc));
     }
 
     void finished(std::string_view response)
     {
-      auto& invoc = _active_invocations.front();
+      _active_invocation->respond(response);
 
-      invoc.respond(response);
-
-      _active_invocations.pop();
+      _status = ClientStatus::NOT_ACTIVE;
     }
 
-    void send(ActiveInvocation& invoc)
+    void activate_memcpy()
     {
-      if(!_active) {
-        add_pending_invocation(std::move(invoc));
-        return;
-      }
+      spdlog::info("[Client] Activate gpuless memcpy for {}", _id);
+      send_gpuless_msg(GPUlessMessage::MEMCPY_ONLY);
+
+      _status = ClientStatus::MEMCPY;
+    }
+
+    void activate_kernels()
+    {
+      spdlog::info("[Client] Activate gpuless kernel exec for {}", _id);
+      send_gpuless_msg(GPUlessMessage::FULL_EXEC);
+
+      _status = ClientStatus::FULL;
+    }
+
+    void send_request()
+    {
+      _active_invocation = std::move(_pending_invocations.front());
+      _pending_invocations.pop();
 
       request().id = iox::cxx::string<64>{iox::cxx::TruncateToCapacity, std::to_string(_invoc_idx++)};
-      request().data.resize(invoc.input().size());
-      std::copy_n(invoc.input().begin(), invoc.input().size(), request().data.data());
-      request().size = invoc.input().size();
+      request().data.resize(_active_invocation->input().size());
+      std::copy_n(_active_invocation->input().begin(), _active_invocation->input().size(), request().data.data());
+      request().size = _active_invocation->input().size();
 
-      send_request();
+      spdlog::info("[Client] Activate gpuless executor for {}", _id);
+      _send.publish(std::move(_payload));
+      _payload = _send.loan().value();
 
-      _active_invocations.push(std::move(invoc));
+      spdlog::info("[Client] Activate gpuless basic exec for {}", _id);
+      send_gpuless_msg(GPUlessMessage::BASIC_EXEC);
+
+      _status = ClientStatus::CPU_ONLY;
     }
 
-    void send_all_pending()
-    {
-      while(!_pending_invocations.empty()) {
-
-        auto& invoc = _pending_invocations.front();
-
-        request().id = iox::cxx::string<64>{iox::cxx::TruncateToCapacity, std::to_string(_invoc_idx++)};
-        request().data.resize(invoc.input().size());
-        std::copy_n(invoc.input().begin(), invoc.input().size(), request().data.data());
-        request().size = invoc.input().size();
-
-        send_request();
-
-        _active_invocations.push(std::move(invoc));
-        _pending_invocations.pop();
-      }
-
-      _active = true;
-    }
-
-    void executor_active()
+    bool executor_active()
     {
       _executor_active = true;
 
-      if(_gpuless_active) {
-        send_all_pending();
-      }
+      _active = _gpuless_active && _executor_active;
+      return _active;
     }
 
-    void gpuless_active()
+    bool gpuless_active()
     {
       _gpuless_active = true;
 
-      if(_executor_active) {
-        send_all_pending();
-      }
+      _active = _gpuless_active && _executor_active;
+      return _active;
     }
 
   private:
@@ -231,12 +225,16 @@ namespace mignificient { namespace orchestrator {
     iox::popo::Subscriber<int> _gpuless_recv;
     iox::popo::Sample<int, iox::mepoo::NoUserHeader> _gpuless_payload;
 
-    GPUlessServer _gpulessServer;
-    std::shared_ptr<Executor> _executor;
+    GPUlessServer _gpuless_server;
+    GPUInstance* _gpu_instance;
+    std::unique_ptr<Executor> _executor;
 
-    // FIXME: pointers would likely work better here due to excessive moving
-    std::queue<ActiveInvocation> _pending_invocations;
-    std::queue<ActiveInvocation> _active_invocations;
+    ClientStatus _status = ClientStatus::NOT_ACTIVE;
+
+    // These are only used to wait before registration
+    std::unique_ptr<ActiveInvocation> _active_invocation;
+    std::queue<std::unique_ptr<ActiveInvocation>> _pending_invocations;
+
 
     iox::popo::Sample<mignificient::executor::Invocation, iox::mepoo::NoUserHeader> _payload;
 
