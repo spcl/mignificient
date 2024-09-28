@@ -13,11 +13,11 @@ namespace mignificient { namespace orchestrator {
 
   struct HTTPTrigger {
 
-    void trigger(ActiveInvocation&& invoc)
+    void trigger(std::unique_ptr<ActiveInvocation> && invoc)
     {
       {
         std::lock_guard<std::mutex> lock(_mutex);
-        _invocations.push(invoc);
+        _invocations.push(std::move(invoc));
       }
       _trigger.trigger();
     }
@@ -32,9 +32,9 @@ namespace mignificient { namespace orchestrator {
       return _invocations.size();
     }
 
-    std::vector<ActiveInvocation> get_invocations()
+    std::vector<std::unique_ptr<ActiveInvocation>> get_invocations()
     {
-      std::vector<ActiveInvocation> invocations;
+      std::vector<std::unique_ptr<ActiveInvocation>> invocations;
 
       {
         std::lock_guard<std::mutex> lock{_mutex};
@@ -53,7 +53,7 @@ namespace mignificient { namespace orchestrator {
 
     // TODO: Lock-free queue?
     std::mutex _mutex;
-    std::queue<ActiveInvocation> _invocations;
+    std::queue<std::unique_ptr<ActiveInvocation>> _invocations;
   };
 
   class HTTPServer : public drogon::HttpController<HTTPServer, false>, public std::enable_shared_from_this<HTTPServer> {
