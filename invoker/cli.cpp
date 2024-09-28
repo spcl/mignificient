@@ -109,10 +109,10 @@ int main(int argc, char ** argv)
 
             res.end = std::chrono::high_resolution_clock::now();
 
-            if(result != drogon::ReqResult::Ok) {
-              spdlog::error("Failed invocation! Result {}", drogon::to_string_view(result));
+            if(result != drogon::ReqResult::Ok || response->getStatusCode() != drogon::HttpStatusCode::k200OK) {
+              spdlog::error("Failed invocation! Result {} Status {} Body {}", drogon::to_string_view(result), response->getStatusCode(), response->body());
             } else {
-              spdlog::debug("Finished invocation. Result {}", drogon::to_string_view(result));
+              spdlog::info("Finished invocation. Result {} Body {}", drogon::to_string_view(result), response->body());
             }
 
             std::lock_guard<std::mutex> lock(mutex);
