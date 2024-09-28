@@ -83,7 +83,15 @@ add_subdirectory(executor)
 
 add_subdirectory(orchestrator)
 
+add_subdirectory(invoker)
+
+add_subdirectory(examples)
+
 configure_file(
   ${CMAKE_SOURCE_DIR}/config/orchestrator.json.in
   ${CMAKE_BINARY_DIR}/config/orchestrator.json
+)
+configure_file(
+  ${CMAKE_SOURCE_DIR}/config/invoker.json.in
+  ${CMAKE_BINARY_DIR}/config/invoker.json
 )

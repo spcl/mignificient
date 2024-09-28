@@ -1,0 +1,14 @@
+{
+  "address": "http://127.0.0.1:10000",
+  "iterations": 2,
+  "parallel-requests": 1,
+  "different-users": false,
+  "input": {
+    "function": "func",
+    "function-path": "${EXAMPLES_DIR}/libvector_add.so",
+    "modules": [],
+    "mig-instance": "7g",
+    "gpu-memory": 1024,
+    "input-payload": "{ \"sleep-time\": 100, \"vec-elements\": 1024, \"data-transfers\": 1024}"
+  }
+}
