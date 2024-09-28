@@ -71,7 +71,7 @@ namespace mignificient { namespace orchestrator {
 
     for (auto& device : _devices) {
       for (auto& instance : device.instances()) {
-          _idle_gpus.push(&instance);
+          _idle_gpus.push_back(&instance);
       }
     }
   }

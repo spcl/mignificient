@@ -1,6 +1,7 @@
 #ifndef __MIGNIFICIENT_ORCHESTRATOR_DEVICE_HPP__
 #define __MIGNIFICIENT_ORCHESTRATOR_DEVICE_HPP__
 
+#include <list>
 #include <stdexcept>
 #include <string>
 #include <queue>
@@ -234,27 +235,35 @@ namespace mignificient { namespace orchestrator {
 
     GPUManager(const std::string& devices_data_path, SharingModel sharing_model);
 
-    GPUInstance* get_free_gpu()
+    GPUInstance* get_free_gpu(float required_memory)
     {
-      if (!_idle_gpus.empty()) {
-          auto* gpu = _idle_gpus.front();
-          _idle_gpus.pop();
-          return gpu;
+      auto it = _idle_gpus.begin();
+      while(it != _idle_gpus.end()) {
+
+        if((*it)->has_enough_memory(required_memory)) {
+
+          GPUInstance* ptr = (*it);
+          _idle_gpus.erase(it);
+          return ptr;
+
+        }
+
       }
+
       return nullptr;
     }
 
     void return_gpu(GPUInstance* gpu) {
-      _idle_gpus.push(gpu);
+      _idle_gpus.push_back(gpu);
     }
 
-    GPUInstance* get_least_busy_gpu()
+    GPUInstance* get_least_busy_gpu(float required_memory)
     {
       GPUInstance* least_busy = nullptr;
       size_t min_pending = std::numeric_limits<size_t>::max();
       for (auto& device : _devices) {
         for (auto& instance : device.instances()) {
-          if (instance.pending_invocations() < min_pending) {
+          if (instance.pending_invocations() < min_pending && instance.has_enough_memory(required_memory)) {
               least_busy = &instance;
               min_pending = instance.pending_invocations();
           }
@@ -265,7 +274,7 @@ namespace mignificient { namespace orchestrator {
 
   private:
     std::vector<GPUDevice> _devices;
-    std::queue<GPUInstance*> _idle_gpus;
+    std::list<GPUInstance*> _idle_gpus;
   };
 
 }}
