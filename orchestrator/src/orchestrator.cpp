@@ -1,6 +1,7 @@
 
-#include <mignificient/orchestrator/executor.hpp>
 #include <mignificient/orchestrator/orchestrator.hpp>
+
+#include <stdexcept>
 
 #include <drogon/drogon.h>
 #include <iceoryx_posh/internal/popo/base_subscriber.hpp>
@@ -28,9 +29,12 @@ namespace mignificient { namespace orchestrator {
 
       if(*res.value().get() == static_cast<int>(GPUlessMessage::REGISTER)) {
         spdlog::error("Received registration from gpuless server {}", client->id());
-        client->gpuless_active();
+        if(client->gpuless_active()) {
+          client->gpu_instance()->schedule_next();
+        }
       } else if(*res.value().get() == static_cast<int>(GPUlessMessage::SWAP_OFF_CONFIRM)) {
         // FIXME: implement
+        throw std::runtime_error("unimplemented");
       } else {
         spdlog::error("Received unknown message from gpuless server, code: {}", *res.value().get());
       }
@@ -45,14 +49,20 @@ namespace mignificient { namespace orchestrator {
       auto res = client->subscriber().take();
 
       if(res.value().get()->msg == executor::Message::FINISH) {
-        spdlog::info("Finish {}", std::string_view{reinterpret_cast<const char*>(res.value().get()->data.data()), res.value().get()->size});
+        //spdlog::info("Finish {}", std::string_view{reinterpret_cast<const char*>(res.value().get()->data.data()), res.value().get()->size});
 
+        client->gpu_instance()->finish_current_invocation();
         client->finished(std::string_view{reinterpret_cast<const char*>(res.value().get()->data.data()), res.value().get()->size});
+
       } else if (res.value().get()->msg == executor::Message::YIELD) {
-        spdlog::info("Yield {}");
+
+        client->gpu_instance()->yield_current_invocation();
+
       } else {
         spdlog::error("Received registration from gpuless executor {}", client->id());
-        client->executor_active();
+        if(client->executor_active()) {
+          client->gpu_instance()->schedule_next();
+        }
       }
     }
   }
@@ -62,31 +72,36 @@ namespace mignificient { namespace orchestrator {
     auto invocations = this_ptr->_http_trigger.get_invocations();
     SPDLOG_DEBUG("Received new invocation!");
 
-    auto clients = this_ptr->_users.process_invocations(invocations);
-    for(auto client : clients) {
+    for(auto & invoc : invocations) {
 
-      this_ptr->_waitset.attachEvent(
-        client->gpuless_subscriber(),
-        iox::popo::SubscriberEvent::DATA_RECEIVED,
-        createNotificationCallback(handle_gpuless, *client)
-      ).or_else(
-        [](auto) {
-          spdlog::error("Failed to attach subscriber");
-          std::exit(EXIT_FAILURE);
-        }
-      );
+      std::cerr << invoc.get() << std::endl;
+      auto [client, success] = this_ptr->_users.process_invocation(std::move(invoc));
 
-      this_ptr->_waitset.attachEvent(
-          client->subscriber(),
+      if(client) {
+
+        this_ptr->_waitset.attachEvent(
+          client->gpuless_subscriber(),
           iox::popo::SubscriberEvent::DATA_RECEIVED,
-          createNotificationCallback(handle_client, *client)
-      ).or_else(
-        [](auto) {
-          spdlog::error("Failed to attach subscriber");
-          std::exit(EXIT_FAILURE);
-        }
-      );
+          createNotificationCallback(handle_gpuless, *client)
+        ).or_else(
+          [](auto) {
+            spdlog::error("Failed to attach subscriber");
+            std::exit(EXIT_FAILURE);
+          }
+        );
 
+        this_ptr->_waitset.attachEvent(
+            client->subscriber(),
+            iox::popo::SubscriberEvent::DATA_RECEIVED,
+            createNotificationCallback(handle_client, *client)
+        ).or_else(
+          [](auto) {
+            spdlog::error("Failed to attach subscriber");
+            std::exit(EXIT_FAILURE);
+          }
+        );
+
+      }
     }
   }
 

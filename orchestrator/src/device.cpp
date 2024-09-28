@@ -68,6 +68,12 @@ namespace mignificient { namespace orchestrator {
     for (const auto& gpu : gpus) {
       _devices.emplace_back(gpu, sharing_model);
     }
+
+    for (auto& device : _devices) {
+      for (auto& instance : device.instances()) {
+          _idle_gpus.push(&instance);
+      }
+    }
   }
 
 }}

@@ -105,8 +105,9 @@ namespace mignificient { namespace orchestrator {
 
   class Executor {
   public:
-      Executor(const std::string& user, const std::string& function, GPUInstance& device):
+      Executor(const std::string& user, const std::string& function, float gpu_memory, GPUInstance& device):
         _user(user),
+        _gpu_memory(gpu_memory),
         _pid(0),
         _function(function),
         _device(device)
@@ -119,6 +120,11 @@ namespace mignificient { namespace orchestrator {
         return _user;
       }
 
+      float gpu_memory() const
+      {
+        return _gpu_memory;
+      }
+
       pid_t pid() const
       {
         return _pid;
@@ -126,6 +132,7 @@ namespace mignificient { namespace orchestrator {
 
   protected:
       std::string _user;
+      float _gpu_memory;
       pid_t _pid;
       std::string _function;
       GPUInstance& _device;
@@ -135,8 +142,8 @@ namespace mignificient { namespace orchestrator {
   public:
     using Executor::Executor;
 
-    BareMetalExecutorCpp(const std::string& user_id, const std::string& function, const std::string& function_path, GPUInstance& device, const Json::Value& config):
-      Executor(user_id, function, device),
+    BareMetalExecutorCpp(const std::string& user_id, const std::string& function, const std::string& function_path, float gpu_memory, GPUInstance& device, const Json::Value& config):
+      Executor(user_id, function, gpu_memory, device),
       _function_path(function_path),
       _cpp_executor(config["cpp"].asString()),
       _gpuless_lib(config["gpuless-lib"].asString())
