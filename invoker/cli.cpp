@@ -57,6 +57,7 @@ int main(int argc, char ** argv)
   bool different_users = config["different-users"].asBool();
   Json::Value input_data = config["input"];
 
+  Json::Value functions = config["functions"];
 
   std::vector<drogon::HttpRequestPtr> requests;
   std::vector<InvocatonResult> results;
@@ -74,6 +75,7 @@ int main(int argc, char ** argv)
       } else {
         input_data["user"] = "user";
       }
+      input_data["function"] = functions[j];
 
       auto req = drogon::HttpRequest::newHttpJsonRequest(input_data);
       req->setMethod(drogon::Post);
