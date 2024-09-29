@@ -122,7 +122,6 @@ namespace mignificient { namespace orchestrator {
         spdlog::info("[GPUInstance {}] Start a new invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
         _pending_invocations.pop();
 
-        spdlog::error("new invoc {}", fmt::ptr(client));
         _current_invocation = std::make_tuple(invocation, client);
 
         client->send_request();
@@ -138,7 +137,6 @@ namespace mignificient { namespace orchestrator {
     void finish_current_invocation()
     {
       auto [invoc, client] = _current_invocation;
-        spdlog::error("finish invoc {}", fmt::ptr(client));
       spdlog::info("[GPUInstance] Finished invocation with id {} for client {}", invoc->uuid(), client->id());
 
       _current_invocation = std::make_tuple(nullptr, nullptr);

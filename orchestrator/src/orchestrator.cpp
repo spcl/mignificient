@@ -70,11 +70,10 @@ namespace mignificient { namespace orchestrator {
   void Orchestrator::_handle_http(iox::popo::UserTrigger*, Orchestrator* this_ptr)
   {
     auto invocations = this_ptr->_http_trigger.get_invocations();
-    SPDLOG_DEBUG("Received new invocation!");
+    spdlog::info("Received new HTTP invocation!");
 
     for(auto & invoc : invocations) {
 
-      std::cerr << invoc.get() << std::endl;
       auto [client, success] = this_ptr->_users.process_invocation(std::move(invoc));
 
       if(client) {

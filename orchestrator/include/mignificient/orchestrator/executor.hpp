@@ -173,12 +173,6 @@ namespace mignificient { namespace orchestrator {
       envs.add(const_cast<char*>(container_name.c_str()));
       envs.add(nullptr);
 
-      for(char* ptr : envs.vector()) {
-
-        if(ptr)
-          spdlog::error(ptr);
-      }
-
       posix_spawnattr_t attr;
       posix_spawn_file_actions_t file_actions;
 
@@ -198,7 +192,7 @@ namespace mignificient { namespace orchestrator {
       int status = posix_spawnp(&_pid, argv[0], &file_actions, &attr, argv, envs.data());
 
       if (status == 0) {
-        spdlog::info("Child process spawned successfully, PID: %d\n", _pid);
+        spdlog::info("Child process spawned successfully, PID: {}", _pid);
       } else {
         spdlog::error("posix_spawn failed: %s\n", strerror(status));
         return false;
