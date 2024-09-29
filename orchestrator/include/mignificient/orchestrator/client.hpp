@@ -145,12 +145,19 @@ namespace mignificient { namespace orchestrator {
 
     void add_invocation(std::unique_ptr<ActiveInvocation> && invoc)
     {
+      spdlog::info("[Client] For client {} add a new invocation {}", _id, invoc->uuid());
       _pending_invocations.push(std::move(invoc));
     }
 
     void finished(std::string_view response)
     {
-      _active_invocation->respond(response);
+      if(_finished_invocation) {
+        _finished_invocation->respond(response);
+        _finished_invocation = nullptr;
+      } else {
+        _active_invocation->respond(response);
+        _active_invocation = nullptr;
+      }
 
       _status = ClientStatus::NOT_ACTIVE;
     }
@@ -173,6 +180,10 @@ namespace mignificient { namespace orchestrator {
 
     void send_request()
     {
+      if(_active_invocation) {
+        _finished_invocation = std::move(_active_invocation);
+      }
+
       _active_invocation = std::move(_pending_invocations.front());
       _pending_invocations.pop();
 
@@ -233,6 +244,12 @@ namespace mignificient { namespace orchestrator {
 
     // These are only used to wait before registration
     std::unique_ptr<ActiveInvocation> _active_invocation;
+
+    // As soon as previous one is finished, we try to schedule
+    // a new one ASAP. If there's a pipeline of requests, then
+    // we need to keep the finished one for final HTTP reply.
+    std::unique_ptr<ActiveInvocation> _finished_invocation;
+
     std::queue<std::unique_ptr<ActiveInvocation>> _pending_invocations;
 
 
