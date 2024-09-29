@@ -119,15 +119,23 @@ namespace mignificient { namespace orchestrator {
 
       } else {
 
-        // FIXME: detect if there is already an invocation running -> update them instead of scheduling new one
+        auto status = client->status();
+        // Not scheduled yet, do the basic work
+        if(status == ClientStatus::NOT_ACTIVE) {
 
-        spdlog::info("[GPUInstance {}] Start a new invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
+          spdlog::info("[GPUInstance {}] Start a new invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
+          client->send_request();
+          client->activate_kernels();
+
+        } else {
+
+          spdlog::info("[GPUInstance {}] Activate full execution for active invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
+          // Activate everything -> device is idle.
+          client->activate_kernels();
+        }
+
         _pending_invocations.pop();
-
         _current_invocation = std::make_tuple(invocation, client);
-
-        client->send_request();
-        client->activate_kernels();
 
         // Check if the next one can be scheduled
         if(_sharing_model != SharingModel::SEQUENTIAL && !_pending_invocations.empty()) {
