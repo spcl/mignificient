@@ -109,10 +109,10 @@ namespace mignificient { namespace orchestrator {
           client->send_request();
         }
 
-        if(status == ClientStatus::CPU_ONLY && _sharing_model == SharingModel::OVERLAP_CPU_MEMCPY) {
+        if(_sharing_model == SharingModel::OVERLAP_CPU_MEMCPY) {
           spdlog::info("[GPUInstance {}] Active memcpy for invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
           client->activate_memcpy();
-        } else if(status == ClientStatus::MEMCPY && _sharing_model == SharingModel::FULL_OVERLAP) {
+        } else if(_sharing_model == SharingModel::FULL_OVERLAP) {
           spdlog::info("[GPUInstance {}] Active full execution for invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
           client->activate_kernels();
         }
