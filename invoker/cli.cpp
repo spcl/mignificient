@@ -57,10 +57,10 @@ int main(int argc, char ** argv)
   bool different_users = config["different-users"].asBool();
   Json::Value input_data = config["input"];
 
-  auto client = drogon::HttpClient::newHttpClient(address);
 
   std::vector<drogon::HttpRequestPtr> requests;
   std::vector<InvocatonResult> results;
+  std::vector<drogon::HttpClientPtr> clients;
   results.resize(iterations * parallel_requests);
 
   //trantor::Logger::setLogLevel(trantor::Logger::kTrace);
@@ -80,6 +80,7 @@ int main(int argc, char ** argv)
       req->setPath("/invoke");
 
       requests.push_back(std::move(req));
+      clients.push_back(drogon::HttpClient::newHttpClient(address));
 
     }
 
@@ -103,7 +104,7 @@ int main(int argc, char ** argv)
 
         auto& res = results[i*parallel_requests + j];
         res.start = std::chrono::high_resolution_clock::now();
-        client->sendRequest(
+        clients[j]->sendRequest(
           requests[i*parallel_requests + j],
           [&res, &count, &mutex, &cv, parallel_requests](drogon::ReqResult result, const drogon::HttpResponsePtr& response) mutable {
 
