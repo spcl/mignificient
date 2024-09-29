@@ -119,6 +119,8 @@ namespace mignificient { namespace orchestrator {
 
       } else {
 
+        // FIXME: detect if there is already an invocation running -> update them instead of scheduling new one
+
         spdlog::info("[GPUInstance {}] Start a new invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
         _pending_invocations.pop();
 
@@ -134,12 +136,16 @@ namespace mignificient { namespace orchestrator {
       }
     }
 
-    void finish_current_invocation()
+    void finish_current_invocation(ActiveInvocation* finished_invoc)
     {
+      spdlog::info("[GPUInstance] Finished invocation with id {}", finished_invoc->uuid());
       auto [invoc, client] = _current_invocation;
-      spdlog::info("[GPUInstance] Finished invocation with id {} for client {}", invoc->uuid(), client->id());
 
-      _current_invocation = std::make_tuple(nullptr, nullptr);
+      // Avoid overwriting if we yielded and are already processing another invocation.
+      if(invoc == finished_invoc) {
+        _current_invocation = std::make_tuple(nullptr, nullptr);
+      }
+
       if(!_pending_invocations.empty()) {
         schedule_next();
       }
@@ -149,6 +155,9 @@ namespace mignificient { namespace orchestrator {
     {
       auto [invoc, client] = _current_invocation;
       spdlog::info("[GPUInstance] Yielded invocation with id {} for client {}", invoc->uuid(), client->id());
+
+      _current_invocation = std::make_tuple(nullptr, nullptr);
+
       if(!_pending_invocations.empty()) {
         schedule_next();
       }

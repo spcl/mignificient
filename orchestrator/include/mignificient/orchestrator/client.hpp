@@ -149,18 +149,9 @@ namespace mignificient { namespace orchestrator {
       _pending_invocations.push(std::move(invoc));
     }
 
-    void finished(std::string_view response)
-    {
-      if(_finished_invocation) {
-        _finished_invocation->respond(response);
-        _finished_invocation = nullptr;
-      } else {
-        _active_invocation->respond(response);
-        _active_invocation = nullptr;
-      }
+    void finished(std::string_view response);
 
-      _status = ClientStatus::NOT_ACTIVE;
-    }
+    void yield();
 
     void activate_memcpy()
     {

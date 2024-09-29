@@ -49,14 +49,12 @@ namespace mignificient { namespace orchestrator {
       auto res = client->subscriber().take();
 
       if(res.value().get()->msg == executor::Message::FINISH) {
-        //spdlog::info("Finish {}", std::string_view{reinterpret_cast<const char*>(res.value().get()->data.data()), res.value().get()->size});
 
-        client->gpu_instance()->finish_current_invocation();
         client->finished(std::string_view{reinterpret_cast<const char*>(res.value().get()->data.data()), res.value().get()->size});
 
       } else if (res.value().get()->msg == executor::Message::YIELD) {
 
-        client->gpu_instance()->yield_current_invocation();
+        client->yield();
 
       } else {
         spdlog::error("Received registration from gpuless executor {}", client->id());
