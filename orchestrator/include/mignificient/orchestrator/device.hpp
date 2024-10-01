@@ -167,6 +167,10 @@ namespace mignificient { namespace orchestrator {
 
     void yield_current_invocation()
     {
+      if(_sharing_model == SharingModel::SEQUENTIAL) {
+        return;
+      }
+
       auto [invoc, client] = _current_invocation;
       spdlog::info("[GPUInstance] Yielded invocation with id {} for client {}", invoc->uuid(), client->id());
 
