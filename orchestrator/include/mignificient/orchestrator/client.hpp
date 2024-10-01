@@ -179,8 +179,9 @@ namespace mignificient { namespace orchestrator {
       _pending_invocations.pop();
 
       request().id = iox::cxx::string<64>{iox::cxx::TruncateToCapacity, std::to_string(_invoc_idx++)};
-      request().data.resize(_active_invocation->input().size());
-      std::copy_n(_active_invocation->input().begin(), _active_invocation->input().size(), request().data.data());
+      //request().data.resize(_active_invocation->input().size());
+      //std::copy_n(_active_invocation->input().begin(), _active_invocation->input().size(), request().data.data());
+      std::copy_n(_active_invocation->input().begin(), _active_invocation->input().size(), request().data);
       request().size = _active_invocation->input().size();
 
       spdlog::info("[Client] Activate gpuless executor for {}", _id);

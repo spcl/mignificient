@@ -8,14 +8,17 @@ namespace mignificient { namespace orchestrator {
   {
     _status = ClientStatus::NOT_ACTIVE;
 
+    // FIXME: Is the finished_invocation really necessary? When can this happen in practice?
     if(_finished_invocation) {
-      gpu_instance()->finish_current_invocation(_finished_invocation.get());
-      _finished_invocation->respond(response);
+      auto tmp = std::move(_finished_invocation);
       _finished_invocation = nullptr;
+      gpu_instance()->finish_current_invocation(tmp.get());
+      tmp->respond(response);
     } else {
-      gpu_instance()->finish_current_invocation(_active_invocation.get());
-      _active_invocation->respond(response);
+      auto tmp = std::move(_active_invocation);
       _active_invocation = nullptr;
+      gpu_instance()->finish_current_invocation(tmp.get());
+      tmp->respond(response);
     }
   }
 
