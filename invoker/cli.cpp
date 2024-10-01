@@ -55,9 +55,7 @@ int main(int argc, char ** argv)
   int iterations = config["iterations"].asInt();
   int parallel_requests = config["parallel-requests"].asInt();
   bool different_users = config["different-users"].asBool();
-  Json::Value input_data = config["input"];
-
-  Json::Value functions = config["functions"];
+  Json::Value input_data = config["inputs"];
 
   std::vector<drogon::HttpRequestPtr> requests;
   std::vector<InvocatonResult> results;
@@ -69,15 +67,29 @@ int main(int argc, char ** argv)
 
     for (int j = 0; j < parallel_requests; ++j) {
 
-      input_data["uuid"] = fmt::format("invoc-{}-{}", i, j);
-      if(different_users) {
-        input_data["user"] = fmt::format("user-{}", j);
-      } else {
-        input_data["user"] = "user";
-      }
-      input_data["function"] = functions[j];
+      drogon::HttpRequestPtr req;
+      if(input_data.isArray()) {
 
-      auto req = drogon::HttpRequest::newHttpJsonRequest(input_data);
+        input_data[j]["uuid"] = fmt::format("invoc-{}-{}", i, j);
+        if(different_users) {
+          input_data[j]["user"] = fmt::format("user-{}", j);
+        } else {
+          input_data[j]["user"] = "user";
+        }
+        req = drogon::HttpRequest::newHttpJsonRequest(input_data[j]);
+
+      } else {
+
+        input_data["uuid"] = fmt::format("invoc-{}-{}", i, j);
+        if(different_users) {
+          input_data["user"] = fmt::format("user-{}", j);
+        } else {
+          input_data["user"] = "user";
+        }
+        req = drogon::HttpRequest::newHttpJsonRequest(input_data);
+
+      }
+
       req->setMethod(drogon::Post);
       req->setPath("/invoke");
 
