@@ -96,6 +96,12 @@ namespace mignificient { namespace orchestrator {
 
       if(is_busy()) {
 
+        auto current_client = std::get<1>(_current_invocation);
+        if(client == current_client) {
+          spdlog::error("Cannot schedule early on the same container; waiting.");
+          return;
+        }
+
         auto status = client->status();
 
         /**
@@ -164,7 +170,13 @@ namespace mignificient { namespace orchestrator {
       auto [invoc, client] = _current_invocation;
       spdlog::info("[GPUInstance] Yielded invocation with id {} for client {}", invoc->uuid(), client->id());
 
+      auto current_client = std::get<1>(_current_invocation);
       _current_invocation = std::make_tuple(nullptr, nullptr);
+
+      if(current_client == std::get<1>(_pending_invocations.front())) {
+        spdlog::error("Yielded but next invocation on the same container; waiting.");
+        return;
+      }
 
       if(!_pending_invocations.empty()) {
         schedule_next();
