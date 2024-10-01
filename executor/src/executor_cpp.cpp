@@ -21,7 +21,7 @@ int main(int argc, char **argv)
 
   prctl(PR_SET_PDEATHSIG, SIGHUP);
 
-  typedef size_t (*fptr)(mignificient::Invocation);
+  typedef int (*fptr)(mignificient::Invocation);
   fptr func;
 
   void *handle = dlopen(function_file.c_str(), RTLD_NOW);
@@ -52,18 +52,15 @@ int main(int argc, char **argv)
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    size_t size = func({runtime, std::move(invocation_data), runtime.result()});
+    int size = func({runtime, std::move(invocation_data), runtime.result()});
 
     auto end = std::chrono::high_resolution_clock::now();
 
-    runtime.gpu_yield();
+    //runtime.gpu_yield();
 
     //runtime.result().size = 10;
-    std::string_view res{"{ \"test\": 42 }"};
 
-    std::copy_n(res.data(), res.length(), reinterpret_cast<char*>(runtime.result().data));
-
-    runtime.finish(res.length());
+    runtime.finish(size);
     spdlog::info("Finished invocation ");
 
   }
