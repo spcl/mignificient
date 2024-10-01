@@ -16,11 +16,13 @@
 namespace mignificient { namespace executor {
 
   struct Invocation {
-    //static constexpr int CAPACITY = 5 * 1024 * 1024;
-    static constexpr int CAPACITY = 10 * 1024;
     // FIXME: replace with static array
+    static constexpr int CAPACITY = 1 * 1024 * 1024;
+    //static constexpr int CAPACITY = 5 * 1024 * 1024;
+    //static constexpr int CAPACITY = 10 * 1024;
     //iox::cxx::vector<uint8_t, CAPACITY> data;
-    std::array<uint8_t, CAPACITY> data;
+    //std::array<uint8_t, CAPACITY> data;
+    uint8_t data[CAPACITY];
     size_t size;
     iox::cxx::string<64> id;
   };

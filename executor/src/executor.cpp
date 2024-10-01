@@ -88,7 +88,8 @@ namespace mignificient { namespace executor {
           _result.value()->size = 0;
           _result.value()->data.resize(InvocationResult::CAPACITY);
 
-          return InvocationData{ptr->data.data(), ptr->size};
+          //return InvocationData{ptr->data.data(), ptr->size};
+          return InvocationData{ptr->data, ptr->size};
         }
       }
     }
