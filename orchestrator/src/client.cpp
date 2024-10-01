@@ -6,6 +6,7 @@ namespace mignificient { namespace orchestrator {
 
   void Client::finished(std::string_view response)
   {
+    _status = ClientStatus::NOT_ACTIVE;
 
     if(_finished_invocation) {
       gpu_instance()->finish_current_invocation(_finished_invocation.get());
@@ -16,8 +17,6 @@ namespace mignificient { namespace orchestrator {
       _active_invocation->respond(response);
       _active_invocation = nullptr;
     }
-
-    _status = ClientStatus::NOT_ACTIVE;
   }
 
   void Client::yield()
