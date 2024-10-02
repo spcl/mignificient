@@ -196,7 +196,7 @@ namespace mignificient { namespace orchestrator {
     void close_executor(pid_t pid)
     {
       auto memory = _executors[pid]->gpu_memory();
-      SPDLOG_DEBUG(""Closing down executor PID {}, freeing up {} MB", pid, memory);
+      SPDLOG_DEBUG("Closing down executor PID {}, freeing up {} MB", pid, memory);
       _executors.erase(pid);
       _used_memory -= memory;
     }
