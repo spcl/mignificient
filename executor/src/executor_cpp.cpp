@@ -61,7 +61,7 @@ int main(int argc, char **argv)
     //runtime.result().size = 10;
 
     runtime.finish(size);
-    spdlog::info("Finished invocation ");
+    spdlog::info("Finished invocation {}", std::chrono::duration_cast<std::chrono::microseconds>(end-start).count() / 1000.0);
 
   }
 

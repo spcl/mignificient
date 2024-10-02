@@ -129,7 +129,7 @@ namespace mignificient { namespace orchestrator {
       selected_client->add_invocation(std::move(invocation));
       selected_gpu->add_invocation(selected_client, invoc_ptr);
 
-      spdlog::info("Processed invocation for function {} on client {}", fname, selected_client->id());
+      SPDLOG_DEBUG("Processed invocation for function {} on client {}", fname, selected_client->id());
       return std::make_tuple(new_client_created ? selected_client : nullptr, true);
     }
 
@@ -142,7 +142,7 @@ namespace mignificient { namespace orchestrator {
       _gpu_clients[username].push_back(std::make_unique<Client>(client_id, fname));
       auto selected_client = _gpu_clients[username].back().get();
 
-      spdlog::error("Allocate a new client {} for user {}", client_id, username);
+      SPDLOG_DEBUG("Allocate a new client {} for user {}", client_id, username);
 
       GPUlessServer gpuless_server;
       gpuless_server.start(client_id, *selected_gpu, _config["poll-gpuless-sleep"].asBool(), _config["bare-metal-executor"]);

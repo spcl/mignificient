@@ -105,7 +105,7 @@ namespace mignificient { namespace orchestrator {
       // This one works with default implementation
       //resp->setBody(std::string{response.begin(), response.size()});
 
-      spdlog::info("[Invoc] Responding to the HTTP request for invocation {}", _uuid);
+      SPDLOG_DEBUG("[Invoc] Responding to the HTTP request for invocation {}", _uuid);
       _http_callback(resp);
     }
 

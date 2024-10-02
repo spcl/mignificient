@@ -61,7 +61,7 @@ namespace mignificient { namespace orchestrator {
     {
       if(is_busy() || !client->is_active()) {
 
-        spdlog::info("[GPUInstance {}] Add invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
+        SPDLOG_DEBUG("[GPUInstance {}] Add invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
         _pending_invocations.emplace(invocation, client);
 
         schedule_next();
@@ -69,7 +69,7 @@ namespace mignificient { namespace orchestrator {
       } else {
 
         _current_invocation = std::make_tuple(invocation, client);
-        spdlog::info("[GPUInstance {}] Start a new active invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
+        //spdlog::info("[GPUInstance {}] Start a new active invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
         client->send_request();
         client->activate_kernels();
       }
@@ -89,7 +89,7 @@ namespace mignificient { namespace orchestrator {
 
       // FIXME: Not tested with scheduling more than 2 invocations
       auto [invocation, client] = _pending_invocations.front();
-      spdlog::error("Attempting to schedule {}, client is active? {}", invocation->uuid(), client->is_active());
+      SPDLOG_DEBUG("Attempting to schedule {}, client is active? {}", invocation->uuid(), client->is_active());
       if(!client->is_active()) {
         return;
       }
@@ -98,7 +98,7 @@ namespace mignificient { namespace orchestrator {
 
         auto current_client = std::get<1>(_current_invocation);
         if(client == current_client) {
-          spdlog::error("Cannot schedule early on the same container; waiting.");
+          SPDLOG_DEBUG("Cannot schedule early on the same container; waiting.");
           return;
         }
 
@@ -111,15 +111,15 @@ namespace mignificient { namespace orchestrator {
          * FULL_OVERLAP: start function, block device
          */
         if(status == ClientStatus::NOT_ACTIVE && _sharing_model != SharingModel::SEQUENTIAL) {
-          spdlog::info("[GPUInstance {}] Start CPU invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
+          SPDLOG_DEBUG("[GPUInstance {}] Start CPU invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
           client->send_request();
         }
 
         if(_sharing_model == SharingModel::OVERLAP_CPU_MEMCPY) {
-          spdlog::info("[GPUInstance {}] Active memcpy for invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
+          SPDLOG_DEBUG("[GPUInstance {}] Active memcpy for invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
           client->activate_memcpy();
         } else if(_sharing_model == SharingModel::FULL_OVERLAP) {
-          spdlog::info("[GPUInstance {}] Active full execution for invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
+          SPDLOG_DEBUG("[GPUInstance {}] Active full execution for invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
           client->activate_kernels();
         }
 
@@ -129,13 +129,13 @@ namespace mignificient { namespace orchestrator {
         // Not scheduled yet, do the basic work
         if(status == ClientStatus::NOT_ACTIVE) {
 
-          spdlog::info("[GPUInstance {}] Start a new invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
+          SPDLOG_DEBUG("[GPUInstance {}] Start a new invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
           client->send_request();
           client->activate_kernels();
 
         } else {
 
-          spdlog::info("[GPUInstance {}] Activate full execution for active invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
+          SPDLOG_DEBUG("[GPUInstance {}] Activate full execution for active invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
           // Activate everything -> device is idle.
           client->activate_kernels();
         }
@@ -152,7 +152,7 @@ namespace mignificient { namespace orchestrator {
 
     void finish_current_invocation(ActiveInvocation* finished_invoc)
     {
-      spdlog::info("[GPUInstance] Finished invocation with id {}", finished_invoc->uuid());
+      //spdlog::info("[GPUInstance] Finished invocation with id {}", finished_invoc->uuid());
       auto [invoc, client] = _current_invocation;
 
       // Avoid overwriting if we yielded and are already processing another invocation.
@@ -172,13 +172,13 @@ namespace mignificient { namespace orchestrator {
       }
 
       auto [invoc, client] = _current_invocation;
-      spdlog::info("[GPUInstance] Yielded invocation with id {} for client {}", invoc->uuid(), client->id());
+      SPDLOG_DEBUG("[GPUInstance] Yielded invocation with id {} for client {}", invoc->uuid(), client->id());
 
       auto current_client = std::get<1>(_current_invocation);
       _current_invocation = std::make_tuple(nullptr, nullptr);
 
       if(current_client == std::get<1>(_pending_invocations.front())) {
-        spdlog::error("Yielded but next invocation on the same container; waiting.");
+        SPDLOG_DEBUG("Yielded but next invocation on the same container; waiting.");
         return;
       }
 
@@ -196,7 +196,7 @@ namespace mignificient { namespace orchestrator {
     void close_executor(pid_t pid)
     {
       auto memory = _executors[pid]->gpu_memory();
-      spdlog::info("Closing down executor PID {}, freeing up {} MB", pid, memory);
+      SPDLOG_DEBUG(""Closing down executor PID {}, freeing up {} MB", pid, memory);
       _executors.erase(pid);
       _used_memory -= memory;
     }

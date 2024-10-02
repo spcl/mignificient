@@ -9,7 +9,7 @@
 
 #include <spdlog/spdlog.h>
 #include <spdlog/fmt/bundled/core.h>
-#include <jsoncpp/json/value.h>
+#include <json/value.h>
 
 extern "C" char **environ;
 

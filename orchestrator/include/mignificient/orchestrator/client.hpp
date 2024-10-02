@@ -145,7 +145,7 @@ namespace mignificient { namespace orchestrator {
 
     void add_invocation(std::unique_ptr<ActiveInvocation> && invoc)
     {
-      spdlog::info("[Client] For client {} add a new invocation {}", _id, invoc->uuid());
+      SPDLOG_DEBUG("[Client] For client {} add a new invocation {}", _id, invoc->uuid());
       _pending_invocations.push(std::move(invoc));
     }
 
@@ -155,7 +155,7 @@ namespace mignificient { namespace orchestrator {
 
     void activate_memcpy()
     {
-      spdlog::info("[Client] Activate gpuless memcpy for {}", _id);
+      SPDLOG_DEBUG("[Client] Activate gpuless memcpy for {}", _id);
       send_gpuless_msg(GPUlessMessage::MEMCPY_ONLY);
 
       _status = ClientStatus::MEMCPY;
@@ -163,7 +163,7 @@ namespace mignificient { namespace orchestrator {
 
     void activate_kernels()
     {
-      spdlog::info("[Client] Activate gpuless kernel exec for {}", _id);
+      SPDLOG_DEBUG("[Client] Activate gpuless kernel exec for {}", _id);
       send_gpuless_msg(GPUlessMessage::FULL_EXEC);
 
       _status = ClientStatus::FULL;
@@ -184,11 +184,11 @@ namespace mignificient { namespace orchestrator {
       std::copy_n(_active_invocation->input().begin(), _active_invocation->input().size(), request().data);
       request().size = _active_invocation->input().size();
 
-      spdlog::info("[Client] Activate gpuless executor for {}", _id);
+      SPDLOG_DEBUG("[Client] Activate gpuless executor for {}", _id);
       _send.publish(std::move(_payload));
       _payload = _send.loan().value();
 
-      spdlog::info("[Client] Activate gpuless basic exec for {}", _id);
+      SPDLOG_DEBUG("[Client] Activate gpuless basic exec for {}", _id);
       send_gpuless_msg(GPUlessMessage::BASIC_EXEC);
 
       _status = ClientStatus::CPU_ONLY;

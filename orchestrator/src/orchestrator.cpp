@@ -68,7 +68,7 @@ namespace mignificient { namespace orchestrator {
   void Orchestrator::_handle_http(iox::popo::UserTrigger*, Orchestrator* this_ptr)
   {
     auto invocations = this_ptr->_http_trigger.get_invocations();
-    spdlog::info("Received new HTTP invocation!");
+    SPDLOG_DEBUG("Received new HTTP invocation!");
 
     for(auto & invoc : invocations) {
 
