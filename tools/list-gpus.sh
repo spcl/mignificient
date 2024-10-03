@@ -84,10 +84,10 @@ done <<< "$gpu_info"
 
 if [ $# -eq 2 ]; then
   gpus_json=$(echo ${gpus_json} | jq --argjson idx "$2" '.[$idx]')
+  final_json=$(jq -n --argjson gpus "$gpus_json" '{gpus: [$gpus]}')
+else
+  final_json=$(jq -n --argjson gpus "$gpus_json" '{gpus: $gpus}')
 fi
-
-final_json=$(jq -n --argjson gpus "$gpus_json" '{gpus: $gpus}')
-
 
 # Save to output file
 echo $final_json | jq '.' > "${output_dir}/devices.json"
