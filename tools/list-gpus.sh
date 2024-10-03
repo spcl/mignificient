@@ -63,11 +63,13 @@ while IFS= read -r line; do
                       "7g.40gb") compute_units=98; memory=40 ;;
                       *) compute_units=0; memory=0 ;;
                   esac
+
+                  memory=$((memory * 1024))
                   
                   # Add MIG instance to instances array
                   instances_json=$(echo $instances_json | jq --arg uuid "$mig_uuid" \
                       --arg memory "$memory" --arg compute_units "$compute_units" --arg mig_size "${mig_size}" \
-                      '. += [{uuid: $uuid, mig_size: ${mig_size}, memory: ($memory|tonumber), compute_units: ($compute_units|tonumber)}]')
+                      '. += [{uuid: $uuid, mig_size: $mig_size, memory: ($memory|tonumber), compute_units: ($compute_units|tonumber)}]')
               fi
             done <<< "$mig_instances"
         fi
