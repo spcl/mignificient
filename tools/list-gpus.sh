@@ -2,7 +2,7 @@
 
 # Check if a file name is provided as an argument
 if [ $# -eq 0 ]; then
-    echo "Error: Please provide an output file name."
+    echo "Error: Please provide an output directory and GPU index (optional)."
     exit 1
 fi
 
@@ -82,7 +82,12 @@ while IFS= read -r line; do
     fi
 done <<< "$gpu_info"
 
+if [ $# -eq 2 ]; then
+  gpus_json=$(echo ${gpus_json} | jq --argjson idx "$2" '.[$idx]')
+fi
+
 final_json=$(jq -n --argjson gpus "$gpus_json" '{gpus: $gpus}')
+
 
 # Save to output file
 echo $final_json | jq '.' > "${output_dir}/devices.json"
