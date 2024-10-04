@@ -18,7 +18,7 @@ struct InvocatonResult
   int invocation;
 };
 
-void independent(const std::string& address, int iterations, int parallel_requests, Json::Value& input_data, bool different_users, std::vector<InvocatonResult>& results)
+void independent(const std::string& address, int iterations, int parallel_requests, Json::Value& input_data, bool different_users, std::vector<InvocatonResult>& results, const std::string& output_file)
 {
   std::vector<drogon::HttpRequestPtr> requests;
   std::vector<drogon::HttpClientPtr> clients;
@@ -40,7 +40,6 @@ void independent(const std::string& address, int iterations, int parallel_reques
         }
         req = drogon::HttpRequest::newHttpJsonRequest(input_data[j]);
 
-        std::cerr << input_data[j] << std::endl;
       } else {
 
         input_data["uuid"] = fmt::format("invoc-{}-{}", i, j);
@@ -51,7 +50,6 @@ void independent(const std::string& address, int iterations, int parallel_reques
         }
         req = drogon::HttpRequest::newHttpJsonRequest(input_data);
 
-        std::cerr << input_data << std::endl;
       }
 
       req->setMethod(drogon::Post);
@@ -62,6 +60,42 @@ void independent(const std::string& address, int iterations, int parallel_reques
 
     }
 
+  }
+
+  {
+    std::vector<std::thread> threads;
+    for (int i = 0; i < parallel_requests; ++i) {
+
+      threads.emplace_back(
+        [iterations, &results, &requests, &clients, parallel_requests, i]() {
+
+          for(int j = 0; j < 1; ++j) {
+
+            auto& res = results[i*iterations + j];
+            spdlog::error("Send worker {}, iter {}", i, j);
+
+            auto [result, response] = clients[i]->sendRequest(requests[i*iterations + j]);
+
+            if(result != drogon::ReqResult::Ok || response->getStatusCode() != drogon::HttpStatusCode::k200OK) {
+              spdlog::error("Failed invocation! Result {}");
+
+              if(response) {
+                spdlog::error("Status {} Body {}", drogon::to_string_view(result), response->getStatusCode(), response->body());
+              }
+            } else {
+              spdlog::info("Finished invocation. Result {} Body {}", drogon::to_string_view(result), response->body());
+            }
+
+          }
+
+        }
+      );
+
+    }
+
+    for(auto & t : threads) {
+      t.join();
+    }
   }
 
   auto begin = std::chrono::high_resolution_clock::now();
@@ -99,6 +133,22 @@ void independent(const std::string& address, int iterations, int parallel_reques
   auto end = std::chrono::high_resolution_clock::now();
 
   spdlog::info("Total time: {}", std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / 1000.0);
+  std::ofstream out{output_file};
+  out << "iteration,worker,time\n";
+  for(int i = 0; i < iterations; ++i) {
+
+    for (int j = 0; j < parallel_requests; ++j) {
+
+      auto& res = results[i*parallel_requests + j];
+      out << fmt::format(
+        "{},{},{}\n",
+        i, j,
+        std::chrono::duration_cast<std::chrono::microseconds>(res.end-res.start).count()
+      );
+
+    }
+
+  }
 
   for(int i = 0; i < parallel_requests; ++i) {
 
@@ -116,7 +166,7 @@ void independent(const std::string& address, int iterations, int parallel_reques
   }
 }
 
-void batches(const std::string& address, int iterations, int parallel_requests, Json::Value& input_data, bool different_users, std::vector<InvocatonResult>& results)
+void batches(const std::string& address, int iterations, int parallel_requests, Json::Value& input_data, bool different_users, std::vector<InvocatonResult>& results, const std::string& output_file)
 {
   std::vector<drogon::HttpRequestPtr> requests;
   std::vector<drogon::HttpClientPtr> clients;
@@ -163,6 +213,7 @@ void batches(const std::string& address, int iterations, int parallel_requests, 
   std::mutex mutex;
   std::condition_variable cv;
 
+  auto begin = std::chrono::high_resolution_clock::now();
   for(int i = 0; i < iterations; ++i) {
 
     int count = 0;
@@ -178,7 +229,11 @@ void batches(const std::string& address, int iterations, int parallel_requests, 
             res.end = std::chrono::high_resolution_clock::now();
 
             if(result != drogon::ReqResult::Ok || response->getStatusCode() != drogon::HttpStatusCode::k200OK) {
-              spdlog::error("Failed invocation! Result {} Status {} Body {}", drogon::to_string_view(result), response->getStatusCode(), response->body());
+              spdlog::error("Failed invocation! Result {}");
+
+              if(response) {
+                spdlog::error("Status {} Body {}", drogon::to_string_view(result), response->getStatusCode(), response->body());
+              }
             } else {
               spdlog::info("Finished invocation. Result {} Body {}", drogon::to_string_view(result), response->body());
             }
@@ -195,14 +250,18 @@ void batches(const std::string& address, int iterations, int parallel_requests, 
     cv.wait(lock, [&count, parallel_requests]() { return count == parallel_requests; });
 
   }
+  auto end = std::chrono::high_resolution_clock::now();
 
+  spdlog::info("Total time: {}", std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / 1000.0);
+  std::ofstream out{output_file};
+  out << "iteration,worker,time\n";
   for(int i = 0; i < iterations; ++i) {
 
     for (int j = 0; j < parallel_requests; ++j) {
 
       auto& res = results[i*parallel_requests + j];
-      spdlog::info(
-        "Iteration {}, Invocation {}, Time {}",
+      out << fmt::format(
+        "{},{},{}\n",
         i, j,
         std::chrono::duration_cast<std::chrono::microseconds>(res.end-res.start).count()
       );
@@ -216,33 +275,23 @@ int main(int argc, char ** argv)
 {
   Json::Value config;
 
-  if(argc == 2) {
+  if(argc != 3) {
+    return 1;
+  }
 
-    spdlog::info("Reading configuration from {}", argv[1]);
-    std::ifstream cfg_data{argv[1]};
+  spdlog::info("Reading configuration from {}", argv[1]);
+  std::ifstream cfg_data{argv[1]};
 
-    if(!cfg_data.is_open()) {
-      spdlog::error("Failed to open file with JSON config!");
-      return 1;
-    }
+  if(!cfg_data.is_open()) {
+    spdlog::error("Failed to open file with JSON config!");
+    return 1;
+  }
 
-    Json::CharReaderBuilder builder;
-    JSONCPP_STRING errs;
-    if (!Json::parseFromStream(builder, cfg_data, &config, &errs)) {
-      spdlog::error("Failed to parse JSON config! {}", errs);
-      return 1;
-    }
-
-  } else {
-
-    spdlog::info("Reading configuration from stdin");
-
-    Json::CharReaderBuilder builder;
-    JSONCPP_STRING errs;
-    if (!Json::parseFromStream(builder, std::cin, &config, &errs)) {
-      spdlog::error("Failed to parse JSON config! {}", errs);
-      return 1;
-    }
+  Json::CharReaderBuilder builder;
+  JSONCPP_STRING errs;
+  if (!Json::parseFromStream(builder, cfg_data, &config, &errs)) {
+    spdlog::error("Failed to parse JSON config! {}", errs);
+    return 1;
   }
 
   std::string mode = config["mode"].asString();
@@ -251,6 +300,7 @@ int main(int argc, char ** argv)
   int parallel_requests = config["parallel-requests"].asInt();
   bool different_users = config["different-users"].asBool();
   Json::Value input_data = config["inputs"];
+  std::string output_file{argv[2]};
 
   drogon::app().setThreadNum(parallel_requests);
 
@@ -262,9 +312,9 @@ int main(int argc, char ** argv)
   results.resize(iterations * parallel_requests);
 
   if(mode == "batches") {
-    batches(address, iterations, parallel_requests, input_data, different_users, results);
+    batches(address, iterations, parallel_requests, input_data, different_users, results, output_file);
   } else if(mode == "independent") {
-    independent(address, iterations, parallel_requests, input_data, different_users, results);
+    independent(address, iterations, parallel_requests, input_data, different_users, results, output_file);
   }
 
   drogon::app().quit();
