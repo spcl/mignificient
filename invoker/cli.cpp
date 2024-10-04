@@ -71,8 +71,8 @@ void independent(const std::string& address, int iterations, int parallel_reques
 
           for(int j = 0; j < 1; ++j) {
 
-            auto& res = results[i*iterations + j];
-            spdlog::error("Send worker {}, iter {}", i, j);
+            auto& res = results[i*parallel_requests + j];
+            SPDLOG_DEBUG("Send worker {}, iter {}", i, j);
 
             auto [result, response] = clients[i]->sendRequest(requests[i*iterations + j]);
 
@@ -83,7 +83,7 @@ void independent(const std::string& address, int iterations, int parallel_reques
                 spdlog::error("Status {} Body {}", drogon::to_string_view(result), response->getStatusCode(), response->body());
               }
             } else {
-              spdlog::info("Finished invocation. Result {} Body {}", drogon::to_string_view(result), response->body());
+              SPDLOG_DEBUG("Finished invocation. Result {} Body {}", drogon::to_string_view(result), response->body());
             }
 
           }
@@ -108,11 +108,12 @@ void independent(const std::string& address, int iterations, int parallel_reques
         for(int j = 0; j < iterations; ++j) {
 
           auto& res = results[i*iterations + j];
-          spdlog::error("Send worker {}, iter {}", i, j);
+          SPDLOG_DEBUG("Send worker {}, iter {}, idx {}", i, j, i*iterations + j);
 
           res.start = std::chrono::high_resolution_clock::now();
           auto [result, response] = clients[i]->sendRequest(requests[i*iterations + j]);
           res.end = std::chrono::high_resolution_clock::now();
+          SPDLOG_DEBUG("Finished worker {}, iter {}", i, j);
 
           if(result != drogon::ReqResult::Ok || response->getStatusCode() != drogon::HttpStatusCode::k200OK) {
             spdlog::error("Failed invocation! Result {} Status {} Body {}", drogon::to_string_view(result), response->getStatusCode(), response->body());
@@ -135,11 +136,12 @@ void independent(const std::string& address, int iterations, int parallel_reques
   spdlog::info("Total time: {}", std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / 1000.0);
   std::ofstream out{output_file};
   out << "iteration,worker,time\n";
-  for(int i = 0; i < iterations; ++i) {
 
-    for (int j = 0; j < parallel_requests; ++j) {
+  for (int j = 0; j < parallel_requests; ++j) {
 
-      auto& res = results[i*parallel_requests + j];
+    for(int i = 0; i < iterations; ++i) {
+
+      auto& res = results[j*iterations + i];
       out << fmt::format(
         "{},{},{}\n",
         i, j,
@@ -150,14 +152,14 @@ void independent(const std::string& address, int iterations, int parallel_reques
 
   }
 
-  for(int i = 0; i < parallel_requests; ++i) {
+  for(int j = 0; j < parallel_requests; ++j) {
 
-    for (int j = 0; j < iterations; ++j) {
+    for (int i = 0; i < iterations; ++i) {
 
-      auto& res = results[i*parallel_requests + j];
+      auto& res = results[j*iterations + i];
       spdlog::info(
         "Client {}, Invocation {}, Time {}",
-        i, j,
+        j, i,
         std::chrono::duration_cast<std::chrono::microseconds>(res.end-res.start).count()
       );
 
