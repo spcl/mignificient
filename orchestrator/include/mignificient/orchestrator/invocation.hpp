@@ -65,6 +65,7 @@ namespace mignificient { namespace orchestrator {
     ):
       _http_callback(std::move(http_callback))
     {
+      _begin = std::chrono::high_resolution_clock::now();
 
       _input_payload = input_data["input-payload"].asString();
       _function_name = input_data["function"].asString();
@@ -96,6 +97,7 @@ namespace mignificient { namespace orchestrator {
 
     void respond(std::string_view response)
     {
+      auto end = std::chrono::high_resolution_clock::now();
       auto resp = drogon::HttpResponse::newHttpResponse();
       resp->setStatusCode(drogon::k200OK);
       resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
@@ -105,7 +107,8 @@ namespace mignificient { namespace orchestrator {
       // This one works with default implementation
       //resp->setBody(std::string{response.begin(), response.size()});
 
-      SPDLOG_DEBUG("[Invoc] Responding to the HTTP request for invocation {}", _uuid);
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - _begin).count();
+      SPDLOG_DEBUG("[Invoc] Responding to the HTTP request for invocation {} from user {} after {} ms", _uuid, _user, duration / 1000.0);
       _http_callback(resp);
     }
 
@@ -142,6 +145,7 @@ namespace mignificient { namespace orchestrator {
   private:
     std::function<void(const drogon::HttpResponsePtr&)> _http_callback;
 
+    decltype(std::chrono::high_resolution_clock::now()) _begin;
     std::string _input_payload;
     std::string _function_name;
     std::string _function_path;
