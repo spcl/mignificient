@@ -144,11 +144,30 @@ namespace mignificient { namespace orchestrator {
 
       SPDLOG_DEBUG("Allocate a new client {} for user {}", client_id, username);
 
+      int executor_cpu_idx = -1;
+      int gpuless_cpu_idx = -1;
+      if(_config["cpu-bind-executor"].asBool()) {
+        executor_cpu_idx = _cpu_index++;
+
+        if(_config["cpu-bind-gpuless"].asBool()) {
+          if(_config["cpu-bind-gpuless-separate"].asBool()) {
+            gpuless_cpu_idx = _cpu_index++;
+          } else {
+            gpuless_cpu_idx = executor_cpu_idx;
+          }
+        }
+
+        SPDLOG_DEBUG("Binding executor {} to CPU {}, Gpuless server bound to CPU {}", client_id, executor_cpu_idx, gpuless_cpu_idx);
+
+      }
+
       GPUlessServer gpuless_server;
-      gpuless_server.start(client_id, *selected_gpu, _config["poll-gpuless-sleep"].asBool(), _config["bare-metal-executor"]);
+      gpuless_server.start(
+        client_id, *selected_gpu, _config["poll-gpuless-sleep"].asBool(), _config["bare-metal-executor"], gpuless_cpu_idx
+      );
 
       auto executor = std::make_unique<BareMetalExecutorCpp>(client_id, fname, invocation->function_path(), invocation->gpu_memory(), *selected_gpu, _config["bare-metal-executor"]);
-      executor->start(_config["poll-sleep"].asBool());
+      executor->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
 
       selected_client->set_gpuless_server(std::move(gpuless_server), selected_gpu);
       selected_gpu->add_executor(executor.get());
@@ -161,6 +180,8 @@ namespace mignificient { namespace orchestrator {
     GPUManager& _gpu_manager;
 
     int _index = 0;
+    // TODO: this might require extension to support platforms where hyperthreads have consecutive IDs
+    int _cpu_index = 0;
     std::unordered_map<std::string, std::vector<std::unique_ptr<Client>>> _gpu_clients;
 
 

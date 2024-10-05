@@ -33,7 +33,7 @@ namespace mignificient { namespace orchestrator {
   class GPUlessServer {
   public:
 
-    bool start(const std::string& user_id, GPUInstance& instance, bool poll_sleep, const Json::Value& config);
+    bool start(const std::string& user_id, GPUInstance& instance, bool poll_sleep, const Json::Value& config, int cpu_idx = -1);
 
   private:
     pid_t _pid;
@@ -144,7 +144,7 @@ namespace mignificient { namespace orchestrator {
       _gpuless_lib(config["gpuless-lib"].asString())
     {}
 
-    bool start(bool poll_sleep);
+    bool start(bool poll_sleep, int cpu_idx = -1);
 
   private:
     std::string _cpp_executor;
@@ -152,9 +152,22 @@ namespace mignificient { namespace orchestrator {
     std::string _gpuless_lib;
   };
 
-  class SarusContainerExecutor : public Executor {
+  class SarusContainerExecutorCpp : public Executor {
   public:
       using Executor::Executor;
+    SarusContainerExecutorCpp(const std::string& user_id, const std::string& function, const std::string& function_path, float gpu_memory, GPUInstance& device, const Json::Value& config):
+      Executor(user_id, function, gpu_memory, device),
+      _function_path(function_path),
+      _cpp_executor(config["cpp"].asString()),
+      _gpuless_lib(config["gpuless-lib"].asString())
+    {}
+
+    bool start(bool poll_sleep, int cpu_idx = -1);
+
+  private:
+    std::string _cpp_executor;
+    std::string _function_path;
+    std::string _gpuless_lib;
   };
 
 }}
