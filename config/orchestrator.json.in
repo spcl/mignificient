@@ -12,6 +12,7 @@
     "bare-metal-executor": {
       "cpp": "${BARE_METAL_EXECUTOR_CPP}",
       "python": ${BARE_METAL_EXECUTOR_PYTHON},
+      "pythonpath": "${BARE_METAL_EXECUTOR_PYTHONPATH}",
       "gpuless-lib": "${CMAKE_BINARY_DIR}/gpuless/libgpuless.so",
       "gpuless-exec": "${CMAKE_BINARY_DIR}/gpuless/manager_device"
     }

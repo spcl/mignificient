@@ -152,6 +152,36 @@ namespace mignificient { namespace orchestrator {
     std::string _gpuless_lib;
   };
 
+  class BareMetalExecutorPython : public Executor {
+  public:
+    using Executor::Executor;
+
+    BareMetalExecutorPython(
+        const std::string& user_id,
+        const std::string& function,
+        const std::string& function_path,
+        float gpu_memory,
+        GPUInstance& device,
+        const Json::Value& config
+    ):
+      Executor(user_id, function, gpu_memory, device),
+      _function_path(function_path),
+      _python_interpreter(config["python"][0].asString()),
+      _python_executor(config["python"][1].asString()),
+      _python_path(config["pythonpath"].asString()),
+      _gpuless_lib(config["gpuless-lib"].asString())
+    {}
+
+    bool start(bool poll_sleep, int cpu_idx = -1);
+
+  private:
+    std::string _function_path;
+    std::string _python_interpreter;
+    std::string _python_executor;
+    std::string _python_path;
+    std::string _gpuless_lib;
+  };
+
   class SarusContainerExecutorCpp : public Executor {
   public:
       using Executor::Executor;
