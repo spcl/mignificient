@@ -77,6 +77,8 @@ namespace mignificient { namespace orchestrator {
     std::string container_name = fmt::format("CONTAINER_NAME={}", _user);
     std::string cpu_idx_str = fmt::format("CPU_BIND_IDX={}", cpu_idx);
 
+    std::string gpuless_elf_path = fmt::format("GPULESS_ELF_DEFINITION={}.txt", _function_path);
+
     auto& envs = Environment::instance();
     envs.restart();
     envs.add(const_cast<char*>(poll_type.c_str()));
@@ -86,6 +88,7 @@ namespace mignificient { namespace orchestrator {
     envs.add(const_cast<char*>(preload.c_str()));
     envs.add(const_cast<char*>(exec_type.c_str()));
     envs.add(const_cast<char*>(container_name.c_str()));
+    envs.add(const_cast<char*>(gpuless_elf_path.c_str()));
     if(cpu_idx != -1) {
       envs.add(const_cast<char*>(cpu_idx_str.c_str()));
     }
