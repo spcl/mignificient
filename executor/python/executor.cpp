@@ -20,6 +20,7 @@ void define_mignificient_runtime(py::module& m)
       .def(py::init<const std::string&>())
       .def("loop_wait", &mignificient::executor::Runtime::loop_wait)
       .def("gpu_yield", &mignificient::executor::Runtime::gpu_yield)
+      .def("register_runtime", &mignificient::executor::Runtime::register_runtime)
       .def("finish", &mignificient::executor::Runtime::finish)
       .def("result", &mignificient::executor::Runtime::result);
 
