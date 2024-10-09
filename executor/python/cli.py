@@ -13,26 +13,29 @@ if __name__ == "__main__":
     function_name = os.environ["FUNCTION_NAME"]
     container_name = os.environ["CONTAINER_NAME"]
 
-    name = os.path.basename(function_file)
-    loader = importlib.machinery.SourceFileLoader(name, function_file)
-    spec = importlib.util.spec_from_loader(loader.name, loader)
-    assert spec
-    mod = importlib.util.module_from_spec(spec)
-    loader.exec_module(mod)
-
-    func = getattr(mod, function_name)
+    func = None
 
     runtime = mignificient.Runtime(container_name)
+    runtime.register_runtime()
 
     while True:
 
-        invocation_data = runtime.loop_wait()
+        if func is None:
 
+            name = os.path.basename(function_file)
+            loader = importlib.machinery.SourceFileLoader(name, function_file)
+            spec = importlib.util.spec_from_loader(loader.name, loader)
+            assert spec
+            mod = importlib.util.module_from_spec(spec)
+            loader.exec_module(mod)
+            func = getattr(mod, function_name)
+
+        invocation_data = runtime.loop_wait()
         if invocation_data.size == 0:
             print("Empty payload, quit")
             break
 
         size = func(mignificient.Invocation(runtime, invocation_data, runtime.result()))
 
-        runtime.finish(size)
+        runtime.finish(10)
 
