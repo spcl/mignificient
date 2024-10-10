@@ -163,11 +163,32 @@ namespace mignificient { namespace orchestrator {
 
       GPUlessServer gpuless_server;
       gpuless_server.start(
-        client_id, *selected_gpu, _config["poll-gpuless-sleep"].asBool(), _config["bare-metal-executor"], gpuless_cpu_idx
+        client_id, *selected_gpu,
+        _config["poll-gpuless-sleep"].asBool(),
+        _config["use-vmm"].asBool(),
+        _config["bare-metal-executor"], gpuless_cpu_idx
       );
 
-      auto executor = std::make_unique<BareMetalExecutorCpp>(client_id, fname, invocation->function_path(), invocation->gpu_memory(), *selected_gpu, _config["bare-metal-executor"]);
-      executor->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
+      std::unique_ptr<Executor> executor;
+      if(invocation->language() == Language::CPP) {
+
+        auto exec = std::make_unique<BareMetalExecutorCpp>(client_id, fname, invocation->function_path(), invocation->gpu_memory(), *selected_gpu, _config["bare-metal-executor"]);
+        exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
+
+        executor = std::move(exec);
+      } else {
+
+        auto exec = std::make_unique<BareMetalExecutorPython>(
+          client_id, fname, invocation->function_path(),
+          invocation->cuda_binary(), invocation->cubin_analysis(),
+          invocation->gpu_memory(), *selected_gpu,
+          _config["bare-metal-executor"]
+        );
+        exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
+
+        executor = std::move(exec);
+
+      }
 
       selected_client->set_gpuless_server(std::move(gpuless_server), selected_gpu);
       selected_gpu->add_executor(executor.get());

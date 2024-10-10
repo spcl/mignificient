@@ -10,6 +10,11 @@
 
 namespace mignificient { namespace orchestrator {
 
+  enum class Language {
+    CPP,
+    PYTHON
+  };
+
   class ActiveInvocation {
   public:
 
@@ -74,6 +79,15 @@ namespace mignificient { namespace orchestrator {
       _user = input_data["user"].asString();
       _uuid = input_data["uuid"].asString();
 
+      if(input_data["function-language"].asString() == "cpp") {
+        _function_language = Language::CPP;
+      } else if(input_data["function-language"].asString() == "python") {
+        _function_language = Language::PYTHON;
+      }
+
+      _cubin_analysis = input_data["cubin-analysis"].asString();
+      _cuda_binary = input_data["cuda-binary"].asString();
+
       int i = 0;
       for(Json::Value& module : input_data["modules"]) {
         _modules[i++] = module.asString();
@@ -132,6 +146,21 @@ namespace mignificient { namespace orchestrator {
       return _user;
     }
 
+    Language language() const
+    {
+      return _function_language;
+    }
+
+    const std::string& cuda_binary() const
+    {
+      return _cuda_binary;
+    }
+
+    const std::string& cubin_analysis() const
+    {
+      return _cubin_analysis;
+    }
+
     const std::string& uuid() const
     {
       return _uuid;
@@ -146,6 +175,10 @@ namespace mignificient { namespace orchestrator {
     std::function<void(const drogon::HttpResponsePtr&)> _http_callback;
 
     decltype(std::chrono::high_resolution_clock::now()) _begin;
+    Language _function_language;
+    std::string _cuda_binary;
+    std::string _cubin_analysis;
+
     std::string _input_payload;
     std::string _function_name;
     std::string _function_path;

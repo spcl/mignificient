@@ -33,15 +33,10 @@ namespace mignificient { namespace orchestrator {
   class GPUlessServer {
   public:
 
-    bool start(const std::string& user_id, GPUInstance& instance, bool poll_sleep, const Json::Value& config, int cpu_idx = -1);
+    bool start(const std::string& user_id, GPUInstance& instance, bool poll_sleep, bool use_vmm, const Json::Value& config, int cpu_idx = -1);
 
   private:
     pid_t _pid;
-  };
-
-  enum class Language {
-    CPP,
-    PYTHON
   };
 
   /**
@@ -160,12 +155,16 @@ namespace mignificient { namespace orchestrator {
         const std::string& user_id,
         const std::string& function,
         const std::string& function_path,
+        const std::string& cuda_binary,
+        const std::string& cubin_analysis,
         float gpu_memory,
         GPUInstance& device,
         const Json::Value& config
     ):
       Executor(user_id, function, gpu_memory, device),
       _function_path(function_path),
+      _cuda_binary(cuda_binary),
+      _cubin_analysis(cubin_analysis),
       _python_interpreter(config["python"][0].asString()),
       _python_executor(config["python"][1].asString()),
       _python_path(config["pythonpath"].asString()),
@@ -176,6 +175,8 @@ namespace mignificient { namespace orchestrator {
 
   private:
     std::string _function_path;
+    std::string _cuda_binary;
+    std::string _cubin_analysis;
     std::string _python_interpreter;
     std::string _python_executor;
     std::string _python_path;

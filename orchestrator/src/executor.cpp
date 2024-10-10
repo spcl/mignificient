@@ -9,11 +9,16 @@
 
 namespace mignificient { namespace orchestrator {
 
-  bool GPUlessServer::start(const std::string& user_id, GPUInstance& instance, bool poll_sleep, const Json::Value& config, int cpu_idx)
+  bool GPUlessServer::start(
+    const std::string& user_id, GPUInstance& instance,
+    bool poll_sleep, bool use_vmm,
+    const Json::Value& config, int cpu_idx
+  )
   {
     std::string gpuless_mgr = config["gpuless-exec"].asString();
     std::string app_name = fmt::format("server-{}", user_id);
     std::string poll_type = poll_sleep ? "wait" : "poll";
+    std::string use_vmm_flag{use_vmm ? "1" : "0"};
     char* argv[] = {
       const_cast<char*>(gpuless_mgr.c_str()),
       const_cast<char*>(instance.uuid().c_str()),
@@ -21,6 +26,7 @@ namespace mignificient { namespace orchestrator {
       const_cast<char*>(app_name.c_str()),
       const_cast<char*>(poll_type.c_str()),
       const_cast<char*>(user_id.c_str()),
+      const_cast<char*>(use_vmm_flag.c_str()),
       NULL
     };
 
@@ -65,7 +71,6 @@ namespace mignificient { namespace orchestrator {
 
   bool BareMetalExecutorCpp::start(bool poll_sleep, int cpu_idx)
   {
-
     char* argv[] = {const_cast<char*>(_cpp_executor.c_str()), NULL};
 
     std::string poll_type = fmt::format("POLL_TYPE={}", poll_sleep ? "wait" : "poll");
@@ -136,13 +141,14 @@ namespace mignificient { namespace orchestrator {
 
     std::string poll_type = fmt::format("POLL_TYPE={}", poll_sleep ? "wait" : "poll");
     std::string fname = fmt::format("FUNCTION_NAME={}", _function);
-    std::string cbinary = fmt::format("CUDA_BINARY={}", _function_path);
+    std::string cbinary = fmt::format("CUDA_BINARY={}", _cuda_binary);
     std::string ffile = fmt::format("FUNCTION_FILE={}", _function_path);
-    std::string preload = fmt::format("LD_PRELOAD={}", _gpuless_lib);
+    std::string preload = fmt::format("LD_PRELOAD=/opt/miniconda3/envs/cuda_116_pytorch/lib/python3.9/site-packages/torch/lib/../../../../libiomp5.so:{}", _gpuless_lib);
     std::string pythonpath = fmt::format("PYTHONPATH={}", _python_path);
     std::string exec_type = "EXECUTOR_TYPE=shmem";
     std::string container_name = fmt::format("CONTAINER_NAME={}", _user);
     std::string cpu_idx_str = fmt::format("CPU_BIND_IDX={}", cpu_idx);
+    std::string gpuless_elf_path = fmt::format("GPULESS_ELF_DEFINITION={}", _cubin_analysis);
 
     auto& envs = Environment::instance();
     envs.restart();
@@ -154,6 +160,7 @@ namespace mignificient { namespace orchestrator {
     envs.add(const_cast<char*>(exec_type.c_str()));
     envs.add(const_cast<char*>(container_name.c_str()));
     envs.add(const_cast<char*>(pythonpath.c_str()));
+    envs.add(const_cast<char*>(gpuless_elf_path.c_str()));
     if(cpu_idx != -1) {
       envs.add(const_cast<char*>(cpu_idx_str.c_str()));
     }
