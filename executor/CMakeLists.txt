@@ -7,6 +7,7 @@ add_library(executor_lib SHARED
   src/function.cpp
 )
 target_include_directories(executor_lib SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(executor_lib SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(executor_lib SYSTEM PRIVATE $<TARGET_PROPERTY:spdlog::spdlog,INTERFACE_INCLUDE_DIRECTORIES>)
 add_dependencies(executor_lib spdlog)
 target_link_libraries(executor_lib
@@ -46,7 +47,8 @@ if(Python_FOUND AND pybind11_FOUND)
 
     configure_file(python/cli.py ${CMAKE_CURRENT_BINARY_DIR}/bin/executor_python.py COPYONLY)
 
-    set(BARE_METAL_EXECUTOR_PYTHON "[\"${Python_EXECUTABLE}\", \"${CMAKE_BINARY_DIR}/executor/bin/python/executor_python.py\"]" PARENT_SCOPE)
+    set(BARE_METAL_EXECUTOR_PYTHON "[\"${Python_EXECUTABLE}\", \"${CMAKE_BINARY_DIR}/executor/bin/executor_python.py\"]" PARENT_SCOPE)
+    set(BARE_METAL_EXECUTOR_PYTHONPATH "${CMAKE_BINARY_DIR}/executor/" PARENT_SCOPE)
 else()
     message(STATUS "NOT building Python executor.")
     message("Python found? ${Python_FOUND}")
