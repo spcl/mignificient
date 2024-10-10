@@ -10,6 +10,9 @@
     "use-vmm": true,
     "poll-sleep": true,
     "poll-gpuless-sleep": true,
+    "cpu-bind-executor": true,
+    "cpu-bind-gpuless": true,
+    "cpu-bind-gpuless-separate": false,
     "bare-metal-executor": {
       "cpp": "${BARE_METAL_EXECUTOR_CPP}",
       "python": ${BARE_METAL_EXECUTOR_PYTHON},

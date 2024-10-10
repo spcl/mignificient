@@ -42,6 +42,23 @@ namespace mignificient { namespace executor {
     sigterm.emplace(iox::posix::registerSignalHandler(iox::posix::Signal::TERM, _sigHandler));
 
     _yield_msg = std::move(client.value().loan().value());
+
+    char* cpu_idx = std::getenv("CPU_BIND_IDX");
+    if(cpu_idx) {
+      int idx = std::atoi(cpu_idx);
+
+      cpu_set_t set;
+      CPU_ZERO(&set);
+      CPU_SET(idx, &set);
+      pid_t pid = getpid();
+
+      spdlog::info("Setting CPU to: {}", idx);
+      spdlog::error("Setting CPU to: {}", idx);
+      if(sched_setaffinity(pid, sizeof(set), &set) == -1) {
+        spdlog::error("Couldn't set the CPU affinity! Error {}", strerror(errno));
+        exit(EXIT_FAILURE);
+      }
+    }
   }
 
   void Runtime::register_runtime()
