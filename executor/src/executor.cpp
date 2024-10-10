@@ -6,6 +6,8 @@
 #include <iceoryx_posh/capro/service_description.hpp>
 #include <spdlog/spdlog.h>
 
+#include <sys/prctl.h>
+
 namespace mignificient { namespace executor {
 
   bool Runtime::_quit = false;
@@ -44,6 +46,9 @@ namespace mignificient { namespace executor {
 
   void Runtime::register_runtime()
   {
+    // Get killed on parent's death
+    prctl(PR_SET_PDEATHSIG, SIGHUP);
+
     _result = std::move(client.value().loan().value());
     _result.value()->msg = Message::REGISTER;
     _result->publish();
