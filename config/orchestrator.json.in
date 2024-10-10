@@ -7,6 +7,7 @@
   },
   "executor": {
     "type": "bare-metal",
+    "use-vmm": true,
     "poll-sleep": true,
     "poll-gpuless-sleep": true,
     "bare-metal-executor": {
