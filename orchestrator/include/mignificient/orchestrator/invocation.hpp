@@ -86,7 +86,8 @@ namespace mignificient { namespace orchestrator {
       }
 
       _cubin_analysis = input_data["cubin-analysis"].asString();
-      _cuda_binary = input_data["cuda-binary"].asString();
+      //_cuda_binary = input_data["cuda-binary"].asString();
+      _ld_preload = !input_data["ld-preload"].isNull() ? input_data["ld-preload"].asString() : std::optional<std::string>{};
 
       int i = 0;
       for(Json::Value& module : input_data["modules"]) {
@@ -151,6 +152,12 @@ namespace mignificient { namespace orchestrator {
       return _function_language;
     }
 
+    const std::optional<std::string>& ld_preload() const
+    {
+      return _ld_preload;
+    }
+
+    // FIXME: remove
     const std::string& cuda_binary() const
     {
       return _cuda_binary;
@@ -179,6 +186,7 @@ namespace mignificient { namespace orchestrator {
     std::string _cuda_binary;
     std::string _cubin_analysis;
 
+    std::optional<std::string> _ld_preload;
     std::string _input_payload;
     std::string _function_name;
     std::string _function_path;

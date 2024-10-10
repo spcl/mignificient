@@ -172,7 +172,11 @@ namespace mignificient { namespace orchestrator {
       std::unique_ptr<Executor> executor;
       if(invocation->language() == Language::CPP) {
 
-        auto exec = std::make_unique<BareMetalExecutorCpp>(client_id, fname, invocation->function_path(), invocation->gpu_memory(), *selected_gpu, _config["bare-metal-executor"]);
+        auto exec = std::make_unique<BareMetalExecutorCpp>(
+          client_id, fname, invocation->function_path(),
+          invocation->gpu_memory(), *selected_gpu, _config["bare-metal-executor"],
+          invocation->ld_preload()
+        );
         exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
 
         executor = std::move(exec);
@@ -182,7 +186,8 @@ namespace mignificient { namespace orchestrator {
           client_id, fname, invocation->function_path(),
           invocation->cuda_binary(), invocation->cubin_analysis(),
           invocation->gpu_memory(), *selected_gpu,
-          _config["bare-metal-executor"]
+          _config["bare-metal-executor"],
+          invocation->ld_preload()
         );
         exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
 

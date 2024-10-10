@@ -77,7 +77,14 @@ namespace mignificient { namespace orchestrator {
     std::string fname = fmt::format("FUNCTION_NAME={}", _function);
     std::string cbinary = fmt::format("CUDA_BINARY={}", _function_path);
     std::string ffile = fmt::format("FUNCTION_FILE={}", _function_path);
-    std::string preload = fmt::format("LD_PRELOAD={}", _gpuless_lib);
+
+    std::string preload;
+    if(_ld_preload.has_value()) {
+      preload = fmt::format("LD_PRELOAD={}:{}", _ld_preload.value(), _gpuless_lib);
+    } else {
+      preload = fmt::format("LD_PRELOAD={}", _gpuless_lib);
+    }
+
     std::string exec_type = "EXECUTOR_TYPE=shmem";
     std::string container_name = fmt::format("CONTAINER_NAME={}", _user);
     std::string cpu_idx_str = fmt::format("CPU_BIND_IDX={}", cpu_idx);
@@ -143,12 +150,18 @@ namespace mignificient { namespace orchestrator {
     std::string fname = fmt::format("FUNCTION_NAME={}", _function);
     std::string cbinary = fmt::format("CUDA_BINARY={}", _cuda_binary);
     std::string ffile = fmt::format("FUNCTION_FILE={}", _function_path);
-    std::string preload = fmt::format("LD_PRELOAD=/opt/miniconda3/envs/cuda_116_pytorch/lib/python3.9/site-packages/torch/lib/../../../../libiomp5.so:{}", _gpuless_lib);
     std::string pythonpath = fmt::format("PYTHONPATH={}", _python_path);
     std::string exec_type = "EXECUTOR_TYPE=shmem";
     std::string container_name = fmt::format("CONTAINER_NAME={}", _user);
     std::string cpu_idx_str = fmt::format("CPU_BIND_IDX={}", cpu_idx);
     std::string gpuless_elf_path = fmt::format("GPULESS_ELF_DEFINITION={}", _cubin_analysis);
+
+    std::string preload;
+    if(_ld_preload.has_value()) {
+      preload = fmt::format("LD_PRELOAD={}:{}", _ld_preload.value(), _gpuless_lib);
+    } else {
+      preload = fmt::format("LD_PRELOAD={}", _gpuless_lib);
+    }
 
     auto& envs = Environment::instance();
     envs.restart();

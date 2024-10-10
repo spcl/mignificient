@@ -95,15 +95,21 @@ namespace mignificient { namespace orchestrator {
 
   class Executor {
   public:
-      Executor(const std::string& user, const std::string& function, float gpu_memory, GPUInstance& device):
+      Executor(const std::string& user, const std::string& function, float gpu_memory, GPUInstance& device, const std::optional<std::string>& ld_preload):
         _user(user),
         _gpu_memory(gpu_memory),
+        _ld_preload(ld_preload),
         _pid(0),
         _function(function),
         _device(device)
       {}
 
       virtual ~Executor() = default;
+
+      const std::optional<std::string>& ld_preload() const
+      {
+        return _ld_preload;
+      }
 
       const std::string& user() const
       {
@@ -122,6 +128,7 @@ namespace mignificient { namespace orchestrator {
 
   protected:
       std::string _user;
+      std::optional<std::string> _ld_preload;
       float _gpu_memory;
       pid_t _pid;
       std::string _function;
@@ -132,8 +139,13 @@ namespace mignificient { namespace orchestrator {
   public:
     using Executor::Executor;
 
-    BareMetalExecutorCpp(const std::string& user_id, const std::string& function, const std::string& function_path, float gpu_memory, GPUInstance& device, const Json::Value& config):
-      Executor(user_id, function, gpu_memory, device),
+    BareMetalExecutorCpp(
+      const std::string& user_id, const std::string& function,
+      const std::string& function_path,
+      float gpu_memory, GPUInstance& device, const Json::Value& config,
+      std::optional<std::string> ld_preload
+    ):
+      Executor(user_id, function, gpu_memory, device, ld_preload),
       _function_path(function_path),
       _cpp_executor(config["cpp"].asString()),
       _gpuless_lib(config["gpuless-lib"].asString())
@@ -159,9 +171,10 @@ namespace mignificient { namespace orchestrator {
         const std::string& cubin_analysis,
         float gpu_memory,
         GPUInstance& device,
-        const Json::Value& config
+        const Json::Value& config,
+        std::optional<std::string> ld_preload
     ):
-      Executor(user_id, function, gpu_memory, device),
+      Executor(user_id, function, gpu_memory, device, ld_preload),
       _function_path(function_path),
       _cuda_binary(cuda_binary),
       _cubin_analysis(cubin_analysis),
@@ -186,8 +199,8 @@ namespace mignificient { namespace orchestrator {
   class SarusContainerExecutorCpp : public Executor {
   public:
       using Executor::Executor;
-    SarusContainerExecutorCpp(const std::string& user_id, const std::string& function, const std::string& function_path, float gpu_memory, GPUInstance& device, const Json::Value& config):
-      Executor(user_id, function, gpu_memory, device),
+    SarusContainerExecutorCpp(const std::string& user_id, const std::string& function, const std::string& function_path, float gpu_memory, GPUInstance& device, const Json::Value& config, const std::optional<std::string>& ld_preload):
+      Executor(user_id, function, gpu_memory, device, ld_preload),
       _function_path(function_path),
       _cpp_executor(config["cpp"].asString()),
       _gpuless_lib(config["gpuless-lib"].asString())
