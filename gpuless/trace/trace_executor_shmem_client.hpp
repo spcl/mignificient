@@ -31,21 +31,21 @@ struct MemChunk {
         ptr = mmap(NULL, CHUNK_SIZE, PROT_READ | PROT_WRITE,
                     MAP_SHARED |  MAP_POPULATE, fd, 0);
                     //MAP_SHARED | MAP_LOCKED | MAP_POPULATE, fd, 0);
-        std::cerr << "allocate " << name << " " << CHUNK_SIZE << " " << reinterpret_cast<std::uintptr_t>(ptr) << std::endl;
+        //std::cerr << "allocate " << name << " " << CHUNK_SIZE << " " << reinterpret_cast<std::uintptr_t>(ptr) << std::endl;
 
         this->size = size;
     }
 
     void open()
     {
-        std::cerr << "open " << name << std::endl;
+        //std::cerr << "open " << name << std::endl;
         int fd = shm_open(name.c_str(), O_RDWR, 0);
         ptr = mmap(NULL, CHUNK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     }
 
     void close()
     {
-        std::cerr << "Close " << name << std::endl;
+        //std::cerr << "Close " << name << std::endl;
         munmap(ptr, CHUNK_SIZE);
         shm_unlink(name.c_str());
     }
@@ -62,12 +62,16 @@ public:
       if(it == used_chunks.end()) {
 
         int fd = shm_open(name.c_str(), O_RDWR, 0);
+	if(fd == -1) {
+	  spdlog::error("Couldn't open the shared memory page {}, error {}", name, strerror(errno));
+	  abort();
+	}
         auto ptr = mmap(NULL, MemChunk::CHUNK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-        //std::cerr << "open " << name << " " << fd << " " << ptr << std::endl;
+        //std::cerr << "open chunk " << name << " " << fd << " " << ptr << std::endl;
         used_chunks[name] = ptr;
         return ptr;
       } else {
-        //std::cerr << "return " << name << " " << (*it).second << std::endl;
+        //std::cerr << "return chunk " << name << " " << (*it).second << std::endl;
         return (*it).second;
       }
     }
@@ -76,7 +80,7 @@ public:
 class MemPool {
 
     std::queue<MemChunk> chunks;
-    std::vector<MemChunk> user_chunks;
+    std::queue<MemChunk> user_chunks;
 
     //std::queue<MemChunk> used_chunks;
     std::unordered_map<std::string, void*> used_chunks;
@@ -99,20 +103,11 @@ public:
       //std::cerr << "Return " << name << std::endl;
       auto it = borrowed_chunks.find(ptr);
       if(it == borrowed_chunks.end()) {
-        //std::cerr << "error!" << std::endl;
+        std::cerr << "error!" << std::endl;
         abort();
       }
-      bool inserted = false;
-      for(int i = 0; i < user_chunks.size(); ++i) {
-        if(user_chunks[i].ptr == nullptr) {
-          user_chunks[i] = (*it).second;
-          inserted = true;
-          break;
-        }
-      }
-      if(!inserted)
-        user_chunks.push_back((*it).second);
-      //std::cerr << "return " << (*it).second.name << " size " << (*it).second.size << " chunks " << user_chunks.size() << std::endl;
+      user_chunks.push((*it).second);
+      //std::cerr << "return " << (*it).second.name << " size " << (*it).second.size << std::endl;
     }
 
     std::optional<std::string> get_name(const void *ptr)
@@ -137,46 +132,27 @@ public:
       //}
 
       // FIXME: turn into list
-      //std::cerr << "borrowin: chunks? " << user_chunks.size() << " requested size " << size << std::endl;
       size_t q_size = user_chunks.size();
-      int pos = -1;
-      int min_size = INT_MAX;
       for(int i = 0; i < q_size; ++i) {
 
-        //std::cerr << "pos " << i << " ptr " << user_chunks[i].ptr << " name " << user_chunks[i].name << " size? " << user_chunks[i].size << std::endl;
-        if(user_chunks[i].ptr != nullptr && user_chunks[i].size >= size) {
-          if(user_chunks[i].size < min_size) {
-            pos = i;
-            min_size = user_chunks[i].size;
-          }
+        MemChunk ret = user_chunks.front(); 
+        user_chunks.pop();
+        if(ret.size > size) {
+          //used_chunks[ret.name] = ret.ptr;
+          borrowed_chunks[ret.ptr] = ret;
+          //std::cerr << "borrow chunk " << ret.name << std::endl;
+          return ret;
         }
-        //MemChunk ret = user_chunks.front(); 
-        //user_chunks.pop();
-        //if(ret.size > size) {
-        //  //used_chunks[ret.name] = ret.ptr;
-        //  borrowed_chunks[ret.ptr] = ret;
-        //  std::cerr << "borrow chunk " << ret.name << std::endl;
-        //  return ret;
-        //}
-        //  std::cerr << "cannot borrow chunk " << ret.size << " " << size << std::endl;
-        //user_chunks.push(ret);
+        user_chunks.push(ret);
       }
-      if(pos != -1) {
-        //std::cerr << "borrow chunk " << user_chunks[pos].name << std::endl;
-        MemChunk chunk = user_chunks[pos];
-        user_chunks[pos].ptr = nullptr;
-        return chunk;
-      } else {
+      std::string name = fmt::format("/gpuless_user_{}", counter++);
+      MemChunk chunk{nullptr, name, 0};
+      chunk.allocate(size);
+      //used_chunks[chunk.name] = chunk.ptr;
+      borrowed_chunks[chunk.ptr] = chunk;
+      //std::cerr << "borrow new chunk " << chunk.name << " size " << chunk.size << std::endl;
 
-        std::string name = fmt::format("/gpuless_user_{}", counter++);
-        MemChunk chunk{nullptr, name, 0};
-        chunk.allocate(size);
-        //used_chunks[chunk.name] = chunk.ptr;
-        borrowed_chunks[chunk.ptr] = chunk;
-        //std::cerr << "borrow new chunk " << chunk.name << " size " << chunk.size << std::endl;
-
-        return chunk;
-      }
+      return chunk;
     }
 
     MemChunk get()
@@ -208,8 +184,13 @@ public:
         ret.close();
 
       }
-      for(MemChunk ret : user_chunks)
+      while(!user_chunks.empty()) {
+
+        MemChunk ret = user_chunks.front(); 
+        user_chunks.pop();
         ret.close();
+
+      }
     }
 };
 
