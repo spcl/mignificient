@@ -1,0 +1,21 @@
+{
+  "address": "http://127.0.0.1:10000",
+  "iterations": 3,
+  "parallel-requests": 1,
+  "mode": "independent",
+  "different-users": true,
+  "inputs": [
+    {
+      "function-language": "cpp",
+      "function": "func",
+      "function-path": "@CMAKE_BINARY_DIR@/examples/libvector_add.so",
+      "cuda-binary": "",
+      "ld-preload": "",
+      "modules": [],
+      "mig-instance": "7g",
+      "gpu-memory": 1024,
+      "input-payload": "{ \"sleep-time\": 100000, \"vec-elements\": 1024, \"data-transfers\": 10}"
+    }
+  ]
+}
+

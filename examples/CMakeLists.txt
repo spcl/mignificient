@@ -28,3 +28,14 @@ target_compile_features(vector_add PRIVATE cuda_std_17)
 set_target_properties(vector_add PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
 add_dependencies(vector_add executor_lib)
 set_target_properties(vector_add PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/vector_add.json
+  ${CMAKE_CURRENT_BINARY_DIR}/vector_add.json
+)
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/cubin.txt
+  ${CMAKE_CURRENT_BINARY_DIR}/libvector_add.so.txt
+  COPYONLY
+)
+
