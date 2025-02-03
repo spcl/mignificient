@@ -74,7 +74,9 @@ void independent(const std::string& address, int iterations, int parallel_reques
             auto& res = results[i*parallel_requests + j];
             SPDLOG_DEBUG("Send worker {}, iter {}", i, j);
 
+            res.start = std::chrono::high_resolution_clock::now();
             auto [result, response] = clients[i]->sendRequest(requests[i*iterations + j]);
+            res.end = std::chrono::high_resolution_clock::now();
 
             if(result != drogon::ReqResult::Ok || response->getStatusCode() != drogon::HttpStatusCode::k200OK) {
               spdlog::error("Failed invocation! Result {}");
@@ -107,8 +109,8 @@ void independent(const std::string& address, int iterations, int parallel_reques
 
         for(int j = 0; j < iterations; ++j) {
 
-          auto& res = results[i*iterations + j];
-          SPDLOG_DEBUG("Send worker {}, iter {}, idx {}", i, j, i*iterations + j);
+          auto& res = results[i*iterations + j + 1];
+          //SPDLOG_DEBUG("Send worker {}, iter {}, idx {}", i, j, i*iterations + j);
 
           res.start = std::chrono::high_resolution_clock::now();
           auto [result, response] = clients[i]->sendRequest(requests[i*iterations + j]);
@@ -139,7 +141,7 @@ void independent(const std::string& address, int iterations, int parallel_reques
 
   for (int j = 0; j < parallel_requests; ++j) {
 
-    for(int i = 0; i < iterations; ++i) {
+    for(int i = 0; i < iterations + 1; ++i) {
 
       auto& res = results[j*iterations + i];
       out << fmt::format(
@@ -311,7 +313,7 @@ int main(int argc, char ** argv)
   });
 
   std::vector<InvocatonResult> results;
-  results.resize(iterations * parallel_requests);
+  results.resize((iterations + 1)* parallel_requests);
 
   if(mode == "batches") {
     batches(address, iterations, parallel_requests, input_data, different_users, results, output_file);

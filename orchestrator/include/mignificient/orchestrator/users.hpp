@@ -207,7 +207,7 @@ namespace mignificient { namespace orchestrator {
 
     int _index = 0;
     // TODO: this might require extension to support platforms where hyperthreads have consecutive IDs
-    int _cpu_index = 0;
+    int _cpu_index = 2;
     std::unordered_map<std::string, std::vector<std::unique_ptr<Client>>> _gpu_clients;
 
 
