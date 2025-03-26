@@ -4,14 +4,22 @@
 
 # Dependencies
 
-flatbuffers
+CUDA 11.6
 
-libbibery
+cuDNN 8.9.7 for CUDA 11
+
+libacl - if these are not available on your system (usually visible through compilation errors caused by missing headers) and you can't install them as package, then install them locally in `DEPS_PATH`.
+
+https://download.savannah.nongnu.org/releases/acl/acl-2.3.2.tar.xz
+
+pybind11
 
 ## Example of building on cluster
 
+We assume that libiberty is installed in `DEPS_PATH`
+
 ```
-pybind11_DIR=/users/mcopik/anaconda3/lib/python3.12/site-packages/pybind11 cmake -DCUDNN_DIR=/scratch/mcopik/gpus/cudnn-8/ -DCMAKE_C_FLAGS="-I ${DEPS_PATH}/include" -DCMAKE_CXX_FLAGS="-I ${DEPS_PATH}/include" -DCMAKE_CXX_STANDARD_LIBRARIES="-L${DEPS_PATH}/lib"  -DCMAKE_BUILD_TYPE=Release ../
+pybind11_DIR=<path-to-your-python/lib/python3.12/site-packages/pybind11 cmake -DCUDNN_DIR=<your-cuddn-installation>/cudnn-8/ -DCMAKE_C_FLAGS="-I ${DEPS_PATH}/include" -DCMAKE_CXX_FLAGS="-I ${DEPS_PATH}/include" -DCMAKE_CXX_STANDARD_LIBRARIES="-L${DEPS_PATH}/lib"  -DCMAKE_BUILD_TYPE=Release ../
 ```
 
 If JsonCpp is not available, then install it and pass explicitly:
