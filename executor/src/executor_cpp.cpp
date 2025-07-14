@@ -9,21 +9,12 @@
 
 #include <mignificient/executor/executor.hpp>
 
-int main(int argc, char **argv)
-{
+typedef int (*fptr)(mignificient::Invocation);
 
+fptr load_function()
+{
   std::string function_file{std::getenv("FUNCTION_FILE")};
   std::string function_name{std::getenv("FUNCTION_NAME")};
-  std::string container_name{std::getenv("CONTAINER_NAME")};
-
-  mignificient::executor::Runtime runtime{container_name};
-  runtime.register_runtime();
-
-  // Get killed on parent's death
-  prctl(PR_SET_PDEATHSIG, SIGHUP);
-
-  typedef int (*fptr)(mignificient::Invocation);
-  fptr func;
 
   void *handle = dlopen(function_file.c_str(), RTLD_NOW);
   if (handle == nullptr)
@@ -32,12 +23,28 @@ int main(int argc, char **argv)
       exit(EXIT_FAILURE);
   }
 
-  func = (fptr)dlsym(handle, function_name.c_str());
+  fptr func = (fptr)dlsym(handle, function_name.c_str());
   if (!func)
   {
       spdlog::error("Couldn't load the function {}, error: {}!", function_name, dlerror());
       exit(EXIT_FAILURE);
   }
+
+  return func;
+}
+
+
+int main(int argc, char **argv)
+{
+  std::string container_name{std::getenv("CONTAINER_NAME")};
+
+  mignificient::executor::Runtime runtime{container_name};
+  runtime.register_runtime();
+
+  // Get killed on parent's death
+  prctl(PR_SET_PDEATHSIG, SIGHUP);
+
+  fptr func = nullptr;
 
   int cpu = sched_getcpu();
   spdlog::info("Running on CPU: {}", cpu);
@@ -51,6 +58,10 @@ int main(int argc, char **argv)
       break;
     }
 
+    if(!func) {
+      func = load_function();
+    }
+
     std::string_view input{reinterpret_cast<const char*>(invocation_data.data), invocation_data.size};
     spdlog::info("Invoke, data size {}, input string {}", invocation_data.size, input);
 
@@ -62,14 +73,13 @@ int main(int argc, char **argv)
 
     //runtime.gpu_yield();
 
-    //runtime.result().size = 10;
-
     runtime.finish(size);
     spdlog::info("Finished invocation {}", std::chrono::duration_cast<std::chrono::microseconds>(end-start).count() / 1000.0);
 
   }
 
-  dlclose(handle);
+  // FIXME
+  //dlclose(handle);
 
   return 0;
 }
