@@ -1,29 +1,28 @@
 diff --git a/iceoryx_posh/include/iceoryx_posh/internal/runtime/posh_runtime_impl.hpp b/iceoryx_posh/include/iceoryx_posh/internal/runtime/posh_runtime_impl.hpp
-index 4c135e52e..4ad2c3e94 100644
+index fb94bdc14..76e29dd89 100644
 --- a/iceoryx_posh/include/iceoryx_posh/internal/runtime/posh_runtime_impl.hpp
 +++ b/iceoryx_posh/include/iceoryx_posh/internal/runtime/posh_runtime_impl.hpp
-@@ -80,7 +80,8 @@ class PoshRuntimeImpl : public PoshRuntime
+@@ -85,7 +85,7 @@ class PoshRuntimeImpl : public PoshRuntime
      /// @copydoc PoshRuntime::sendRequestToRouDi
      bool sendRequestToRouDi(const IpcMessage& msg, IpcMessage& answer) noexcept override;
  
 -  protected:
-+  //protected:
 +  public:
      friend class PoshRuntime;
-     friend class roudi::RuntimeTestInterface;
- 
+     friend class roudi_env::RuntimeTestInterface;
+     friend class posh::experimental::Node;
 diff --git a/iceoryx_posh/include/iceoryx_posh/runtime/posh_runtime.hpp b/iceoryx_posh/include/iceoryx_posh/runtime/posh_runtime.hpp
-index 20224070e..a6fe79e85 100644
+index 9cc94e067..0cff9ef56 100644
 --- a/iceoryx_posh/include/iceoryx_posh/runtime/posh_runtime.hpp
 +++ b/iceoryx_posh/include/iceoryx_posh/runtime/posh_runtime.hpp
-@@ -159,11 +159,13 @@ class PoshRuntime
+@@ -165,11 +165,13 @@ class PoshRuntime
      /// @return current runtime factory
      static factory_t& getRuntimeFactory() noexcept;
  
 +  public:
      /// @brief sets runtime factory, terminates if given factory is empty
      ///
-     /// @param[in] factory std::function to which the runtime factory should be set
+     /// @param[in] factory function pointer to which the runtime factory should be set
      static void setRuntimeFactory(const factory_t& factory) noexcept;
  
 +  protected:
