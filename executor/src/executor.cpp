@@ -1,7 +1,7 @@
 
 #include <mignificient/executor/executor.hpp>
 
-#include <iceoryx_hoofs/posix_wrapper/signal_watcher.hpp>
+#include <iox/signal_watcher.hpp>
 #include <iceoryx_hoofs/posix_wrapper/signal_handler.hpp>
 #include <iceoryx_posh/capro/service_description.hpp>
 #include <spdlog/spdlog.h>
@@ -25,10 +25,10 @@ namespace mignificient { namespace executor {
   Runtime::Runtime(const std::string& name):
     last_message(nullptr)
   {
-    iox::runtime::PoshRuntime::initRuntime(iox::RuntimeName_t{iox::cxx::TruncateToCapacity_t{}, name});
+    iox::runtime::PoshRuntime::initRuntime(iox::RuntimeName_t{iox::TruncateToCapacity_t{}, name.c_str()});
 
-    client.emplace(iox::capro::ServiceDescription{iox::RuntimeName_t{iox::cxx::TruncateToCapacity_t{}, name}, "Orchestrator", "Send"});
-    orchestrator.emplace(iox::capro::ServiceDescription{iox::RuntimeName_t{iox::cxx::TruncateToCapacity_t{}, name}, "Orchestrator", "Receive"});
+    client.emplace(iox::capro::ServiceDescription{iox::RuntimeName_t{iox::TruncateToCapacity_t{}, name.c_str()}, "Orchestrator", "Send"});
+    orchestrator.emplace(iox::capro::ServiceDescription{iox::RuntimeName_t{iox::TruncateToCapacity_t{}, name.c_str()}, "Orchestrator", "Receive"});
 
     waitset.emplace();
     waitset.value().attachState(orchestrator.value(), iox::popo::SubscriberState::HAS_DATA).or_else([](auto) {
@@ -38,8 +38,8 @@ namespace mignificient { namespace executor {
 
     _waitset = &waitset.value();
   
-    sigint.emplace(iox::posix::registerSignalHandler(iox::posix::Signal::INT, _sigHandler));
-    sigterm.emplace(iox::posix::registerSignalHandler(iox::posix::Signal::TERM, _sigHandler));
+    sigint.emplace(iox::posix::registerSignalHandler(iox::posix::Signal::INT, _sigHandler).expect("correct signal"));
+    sigterm.emplace(iox::posix::registerSignalHandler(iox::posix::Signal::TERM, _sigHandler).expect("correct signal"));
 
     _yield_msg = std::move(client.value().loan().value());
 

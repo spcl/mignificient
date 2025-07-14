@@ -105,7 +105,7 @@ namespace mignificient { namespace orchestrator {
   void Orchestrator::init(const Json::Value& config)
   {
     iox::runtime::PoshRuntime::initRuntime(
-        iox::RuntimeName_t{iox::cxx::TruncateToCapacity_t{}, config["name"].asString()}
+        iox::RuntimeName_t{iox::TruncateToCapacity_t{}, config["name"].asString().c_str()}
     );
   }
 
@@ -118,8 +118,8 @@ namespace mignificient { namespace orchestrator {
     auto http_config = config["http"];
     _http_server = std::make_shared<HTTPServer>(http_config, _http_trigger);
 
-    sigint.emplace(iox::posix::registerSignalHandler(iox::posix::Signal::INT, _sigHandler));
-    sigterm.emplace(iox::posix::registerSignalHandler(iox::posix::Signal::TERM, _sigHandler));
+    sigint.emplace(iox::posix::registerSignalHandler(iox::posix::Signal::INT, _sigHandler).expect("correct signal"));
+    sigterm.emplace(iox::posix::registerSignalHandler(iox::posix::Signal::TERM, _sigHandler).expect("correct signal"));
 
     _waitset.attachEvent(
         _http_trigger.iceoryx_trigger(),

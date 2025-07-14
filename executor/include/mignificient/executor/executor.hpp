@@ -24,7 +24,7 @@ namespace mignificient { namespace executor {
     //std::array<uint8_t, CAPACITY> data;
     uint8_t data[CAPACITY];
     size_t size;
-    iox::cxx::string<64> id;
+    iox::string<64> id;
   };
 
   enum class Message {
@@ -38,7 +38,7 @@ namespace mignificient { namespace executor {
   struct InvocationResult {
     static constexpr int CAPACITY = 5 * 1024 * 1024;
     Message msg;
-    iox::cxx::vector<uint8_t, CAPACITY> data;
+    iox::vector<uint8_t, CAPACITY> data;
     size_t size;
   };
 

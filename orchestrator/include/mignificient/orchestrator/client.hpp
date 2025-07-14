@@ -31,28 +31,28 @@ namespace mignificient { namespace orchestrator {
       _busy(false),
       _send(
         iox::capro::ServiceDescription{
-          iox::RuntimeName_t{iox::cxx::TruncateToCapacity_t{}, id},
+          iox::RuntimeName_t{iox::TruncateToCapacity_t{}, id.c_str()},
           "Orchestrator",
           "Receive"
         }
       ),
       _recv(
         iox::capro::ServiceDescription{
-          iox::RuntimeName_t{iox::cxx::TruncateToCapacity_t{}, id},
+          iox::RuntimeName_t{iox::TruncateToCapacity_t{}, id.c_str()},
           "Orchestrator",
           "Send"
         }
       ),
       _gpuless_send(
         iox::capro::ServiceDescription{
-          iox::RuntimeName_t{iox::cxx::TruncateToCapacity_t{}, fmt::format("gpuless-{}", id)},
+          iox::RuntimeName_t{iox::TruncateToCapacity_t{}, fmt::format("gpuless-{}", id).c_str()},
           "Orchestrator",
           "Receive"
         }
       ),
       _gpuless_recv(
         iox::capro::ServiceDescription{
-          iox::RuntimeName_t{iox::cxx::TruncateToCapacity_t{}, fmt::format("gpuless-{}", id)},
+          iox::RuntimeName_t{iox::TruncateToCapacity_t{}, fmt::format("gpuless-{}", id).c_str()},
           "Orchestrator",
           "Send"
         }
@@ -178,7 +178,7 @@ namespace mignificient { namespace orchestrator {
       _active_invocation = std::move(_pending_invocations.front());
       _pending_invocations.pop();
 
-      request().id = iox::cxx::string<64>{iox::cxx::TruncateToCapacity, std::to_string(_invoc_idx++)};
+      request().id = iox::string<64>{iox::TruncateToCapacity, std::to_string(_invoc_idx++).c_str()};
       //request().data.resize(_active_invocation->input().size());
       //std::copy_n(_active_invocation->input().begin(), _active_invocation->input().size(), request().data.data());
       std::copy_n(_active_invocation->input().begin(), _active_invocation->input().size(), request().data);
