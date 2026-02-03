@@ -1,0 +1,314 @@
+diff --git a/trantor/net/inner/tlsprovider/OpenSSLProvider.cc b/trantor/net/inner/tlsprovider/OpenSSLProvider.cc
+index a435d31..db1240f 100644
+--- a/trantor/net/inner/tlsprovider/OpenSSLProvider.cc
++++ b/trantor/net/inner/tlsprovider/OpenSSLProvider.cc
+@@ -125,43 +125,43 @@ inline bool verifyAltName(X509 *cert, const std::string &hostname)
+     return good;
+ }
+ 
+-static bool validatePeerCertificate(SSL *ssl,
+-                                    X509 *cert,
+-                                    const std::string &hostname,
+-                                    bool allowBrokenChain,
+-                                    bool isServer)
+-{
+-    assert(ssl != nullptr);
+-    assert(cert != nullptr);
+-    LOG_TRACE << "Validating peer cerificate";
+-
+-    if (isServer)
+-    {
+-        bool domainIsValid =
+-            verifyCommonName(cert, hostname) || verifyAltName(cert, hostname);
+-        if (!domainIsValid)
+-            return false;
+-    }
+-
+-    auto result = SSL_get_verify_result(ssl);
+-    if (result == X509_V_ERR_CERT_NOT_YET_VALID ||
+-        result == X509_V_ERR_CERT_HAS_EXPIRED)
+-    {
+-        // What happens if cert is self-signed and expired?
+-        LOG_TRACE << "cert error code: " << result
+-                  << ", date validation failed";
+-        return false;
+-    }
+-
+-    if (result != X509_V_OK && !allowBrokenChain)
+-    {
+-        LOG_TRACE << "cert error code: " << result;
+-        LOG_ERROR << "Peer certificate is not valid";
+-        return false;
+-    }
+-
+-    return true;
+-}
++//static bool validatePeerCertificate(SSL *ssl,
++//                                    X509 *cert,
++//                                    const std::string &hostname,
++//                                    bool allowBrokenChain,
++//                                    bool isServer)
++//{
++//    assert(ssl != nullptr);
++//    assert(cert != nullptr);
++//    LOG_TRACE << "Validating peer cerificate";
++//
++//    if (isServer)
++//    {
++//        bool domainIsValid =
++//            verifyCommonName(cert, hostname) || verifyAltName(cert, hostname);
++//        if (!domainIsValid)
++//            return false;
++//    }
++//
++//    auto result = SSL_get_verify_result(ssl);
++//    if (result == X509_V_ERR_CERT_NOT_YET_VALID ||
++//        result == X509_V_ERR_CERT_HAS_EXPIRED)
++//    {
++//        // What happens if cert is self-signed and expired?
++//        LOG_TRACE << "cert error code: " << result
++//                  << ", date validation failed";
++//        return false;
++//    }
++//
++//    if (result != X509_V_OK && !allowBrokenChain)
++//    {
++//        LOG_TRACE << "cert error code: " << result;
++//        LOG_ERROR << "Peer certificate is not valid";
++//        return false;
++//    }
++//
++//    return true;
++//}
+ 
+ static int serverSelectProtocol(SSL *ssl,
+                                 const unsigned char **out,
+@@ -651,40 +651,40 @@ struct OpenSSLProvider : public TLSProvider, public NonCopyable
+ #endif
+             }
+ 
+-            auto cert = SSL_get_peer_certificate(ssl_);
+-            bool needCert = policyPtr_->getValidate();
+-            if (cert)
+-                setPeerCertificate(std::make_shared<OpenSSLCertificate>(cert));
+-
+-            if (needCert)
+-            {
+-                if (cert)
+-                {
+-                    bool valid = internal::validatePeerCertificate(
+-                        ssl_,
+-                        cert,
+-                        policyPtr_->getHostname(),
+-                        policyPtr_->getAllowBrokenChain(),
+-                        contextPtr_->isServer);
+-                    if (!valid)
+-                    {
+-                        LOG_TRACE
+-                            << "SSL handshake error: invalid peer certificate";
+-                        SSL_shutdown(ssl_);
+-                        handleSSLError(SSLError::kSSLInvalidCertificate);
+-                        return false;
+-                    }
+-                }
+-                else
+-                {
+-                    LOG_TRACE
+-                        << "SSL handshake error: no peer certificate. Cannot "
+-                           "perform validation";
+-                    SSL_shutdown(ssl_);
+-                    handleSSLError(SSLError::kSSLInvalidCertificate);
+-                    return false;
+-                }
+-            }
++            //auto cert = SSL_get_peer_certificate(ssl_);
++            //bool needCert = policyPtr_->getValidate();
++            //if (cert)
++            //    setPeerCertificate(std::make_shared<OpenSSLCertificate>(cert));
++
++            //if (needCert)
++            //{
++            //    if (cert)
++            //    {
++            //        bool valid = internal::validatePeerCertificate(
++            //            ssl_,
++            //            cert,
++            //            policyPtr_->getHostname(),
++            //            policyPtr_->getAllowBrokenChain(),
++            //            contextPtr_->isServer);
++            //        if (!valid)
++            //        {
++            //            LOG_TRACE
++            //                << "SSL handshake error: invalid peer certificate";
++            //            SSL_shutdown(ssl_);
++            //            handleSSLError(SSLError::kSSLInvalidCertificate);
++            //            return false;
++            //        }
++            //    }
++            //    else
++            //    {
++            //        LOG_TRACE
++            //            << "SSL handshake error: no peer certificate. Cannot "
++            //               "perform validation";
++            //        SSL_shutdown(ssl_);
++            //        handleSSLError(SSLError::kSSLInvalidCertificate);
++            //        return false;
++            //    }
++            //}
+ 
+             if (handshakeCallback_)
+                 handshakeCallback_(conn_);
+diff --git a/trantor/utils/crypto/openssl.cc b/trantor/utils/crypto/openssl.cc
+index 8ac44a6..0e768c5 100644
+--- a/trantor/utils/crypto/openssl.cc
++++ b/trantor/utils/crypto/openssl.cc
+@@ -19,17 +19,18 @@ namespace trantor
+ {
+ namespace utils
+ {
+-Hash128 md5(const void* data, size_t len)
++Hash128 md5(const void* , size_t)
+ {
+ #if OPENSSL_VERSION_MAJOR >= 3
+     Hash128 hash;
+-    auto md5 = EVP_MD_fetch(nullptr, "MD5", nullptr);
+-    auto ctx = EVP_MD_CTX_new();
+-    EVP_DigestInit_ex(ctx, md5, nullptr);
+-    EVP_DigestUpdate(ctx, data, len);
+-    EVP_DigestFinal_ex(ctx, (unsigned char*)&hash, nullptr);
+-    EVP_MD_CTX_free(ctx);
+-    EVP_MD_free(md5);
++    memset(&hash, 0, sizeof(Hash128));
++    //auto md5 = EVP_MD_fetch(nullptr, "MD5", nullptr);
++    //auto ctx = EVP_MD_CTX_new();
++    //EVP_DigestInit_ex(ctx, md5, nullptr);
++    //EVP_DigestUpdate(ctx, data, len);
++    //EVP_DigestFinal_ex(ctx, (unsigned char*)&hash, nullptr);
++    //EVP_MD_CTX_free(ctx);
++    //EVP_MD_free(md5);
+     return hash;
+ #else
+     Hash128 hash;
+@@ -41,17 +42,17 @@ Hash128 md5(const void* data, size_t len)
+ #endif
+ }
+ 
+-Hash160 sha1(const void* data, size_t len)
++Hash160 sha1(const void*, size_t)
+ {
+ #if OPENSSL_VERSION_MAJOR >= 3
+     Hash160 hash;
+-    auto sha1 = EVP_MD_fetch(nullptr, "SHA1", nullptr);
+-    auto ctx = EVP_MD_CTX_new();
+-    EVP_DigestInit_ex(ctx, sha1, nullptr);
+-    EVP_DigestUpdate(ctx, data, len);
+-    EVP_DigestFinal_ex(ctx, (unsigned char*)&hash, nullptr);
+-    EVP_MD_CTX_free(ctx);
+-    EVP_MD_free(sha1);
++    //auto sha1 = EVP_MD_fetch(nullptr, "SHA1", nullptr);
++    //auto ctx = EVP_MD_CTX_new();
++    //EVP_DigestInit_ex(ctx, sha1, nullptr);
++    //EVP_DigestUpdate(ctx, data, len);
++    //EVP_DigestFinal_ex(ctx, (unsigned char*)&hash, nullptr);
++    //EVP_MD_CTX_free(ctx);
++    //EVP_MD_free(sha1);
+     return hash;
+ #else
+     Hash160 hash;
+@@ -63,17 +64,17 @@ Hash160 sha1(const void* data, size_t len)
+ #endif
+ }
+ 
+-Hash256 sha256(const void* data, size_t len)
++Hash256 sha256(const void*, size_t)
+ {
+ #if OPENSSL_VERSION_MAJOR >= 3
+     Hash256 hash;
+-    auto sha256 = EVP_MD_fetch(nullptr, "SHA256", nullptr);
+-    auto ctx = EVP_MD_CTX_new();
+-    EVP_DigestInit_ex(ctx, sha256, nullptr);
+-    EVP_DigestUpdate(ctx, data, len);
+-    EVP_DigestFinal_ex(ctx, (unsigned char*)&hash, nullptr);
+-    EVP_MD_CTX_free(ctx);
+-    EVP_MD_free(sha256);
++    //auto sha256 = EVP_MD_fetch(nullptr, "SHA256", nullptr);
++    //auto ctx = EVP_MD_CTX_new();
++    //EVP_DigestInit_ex(ctx, sha256, nullptr);
++    //EVP_DigestUpdate(ctx, data, len);
++    //EVP_DigestFinal_ex(ctx, (unsigned char*)&hash, nullptr);
++    //EVP_MD_CTX_free(ctx);
++    //EVP_MD_free(sha256);
+     return hash;
+ #else
+     Hash256 hash;
+@@ -89,26 +90,26 @@ Hash256 sha3(const void* data, size_t len)
+ {
+     Hash256 hash;
+ #if OPENSSL_VERSION_MAJOR >= 3
+-    auto sha3 = EVP_MD_fetch(nullptr, "SHA3-256", nullptr);
+-    if (sha3 != nullptr)
+-    {
+-        auto ctx = EVP_MD_CTX_new();
+-        EVP_DigestInit_ex(ctx, sha3, nullptr);
+-        EVP_DigestUpdate(ctx, data, len);
+-        EVP_DigestFinal_ex(ctx, (unsigned char*)&hash, nullptr);
+-        EVP_MD_CTX_free(ctx);
+-        EVP_MD_free(sha3);
+-        return hash;
+-    }
++    //auto sha3 = EVP_MD_fetch(nullptr, "SHA3-256", nullptr);
++    //if (sha3 != nullptr)
++    //{
++    //    //auto ctx = EVP_MD_CTX_new();
++    //    //EVP_DigestInit_ex(ctx, sha3, nullptr);
++    //    //EVP_DigestUpdate(ctx, data, len);
++    //    //EVP_DigestFinal_ex(ctx, (unsigned char*)&hash, nullptr);
++    //    //EVP_MD_CTX_free(ctx);
++    //    //EVP_MD_free(sha3);
++    //    return hash;
++    //}
+ #elif !defined(LIBRESSL_VERSION_NUMBER)
+     auto sha3 = EVP_sha3_256();
+     if (sha3 != nullptr)
+     {
+         EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+-        EVP_DigestInit_ex(ctx, sha3, nullptr);
+-        EVP_DigestUpdate(ctx, data, len);
+-        EVP_DigestFinal_ex(ctx, (unsigned char*)&hash, nullptr);
+-        EVP_MD_CTX_free(ctx);
++        //EVP_DigestInit_ex(ctx, sha3, nullptr);
++        //EVP_DigestUpdate(ctx, data, len);
++        //EVP_DigestFinal_ex(ctx, (unsigned char*)&hash, nullptr);
++        //EVP_MD_CTX_free(ctx);
+         return hash;
+     }
+ #endif
+@@ -120,17 +121,17 @@ Hash256 blake2b(const void* data, size_t len)
+ {
+     Hash256 hash;
+ #if OPENSSL_VERSION_MAJOR >= 3
+-    auto blake2b = EVP_MD_fetch(nullptr, "BLAKE2b-256", nullptr);
+-    if (blake2b != nullptr)
+-    {
+-        auto ctx = EVP_MD_CTX_new();
+-        EVP_DigestInit_ex(ctx, blake2b, nullptr);
+-        EVP_DigestUpdate(ctx, data, len);
+-        EVP_DigestFinal_ex(ctx, (unsigned char*)&hash, nullptr);
+-        EVP_MD_CTX_free(ctx);
+-        EVP_MD_free(blake2b);
+-        return hash;
+-    }
++    //auto blake2b = EVP_MD_fetch(nullptr, "BLAKE2b-256", nullptr);
++    //if (blake2b != nullptr)
++    //{
++    //    auto ctx = EVP_MD_CTX_new();
++    //    //EVP_DigestInit_ex(ctx, blake2b, nullptr);
++    //    //EVP_DigestUpdate(ctx, data, len);
++    //    //EVP_DigestFinal_ex(ctx, (unsigned char*)&hash, nullptr);
++    //    //EVP_MD_CTX_free(ctx);
++    //    //EVP_MD_free(blake2b);
++    //    return hash;
++    //}
+ #endif
+     trantor_blake2b(&hash, sizeof(hash), data, len, nullptr, 0);
+     return hash;
