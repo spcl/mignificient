@@ -9,7 +9,11 @@ count = 1000
 
 [[segment.mempool]]
 size = 20480
-count = 100
+count = 1000
+
+[[segment.mempool]]
+size = 204800
+count = 1000
 
 [[segment.mempool]]
 size = 52428800
