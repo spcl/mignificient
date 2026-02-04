@@ -118,7 +118,11 @@ void independent(const std::string& address, int iterations, int parallel_reques
           SPDLOG_DEBUG("Finished worker {}, iter {}", i, j);
 
           if(result != drogon::ReqResult::Ok || response->getStatusCode() != drogon::HttpStatusCode::k200OK) {
-            spdlog::error("Failed invocation! Result {} Status {} Body {}", drogon::to_string_view(result), response->getStatusCode(), response->body());
+            spdlog::error("Failed invocation! Result {}");
+
+            if(response) {
+              spdlog::error("Status {} Body {}", drogon::to_string_view(result), response->getStatusCode(), response->body());
+            }
           } else {
             spdlog::info("Finished invocation. Result {} Body {}", drogon::to_string_view(result), response->body());
           }
