@@ -307,6 +307,7 @@ int main(int argc, char ** argv)
   std::string output_file{argv[2]};
 
   drogon::app().setThreadNum(parallel_requests);
+  drogon::app().disableSigtermHandling();
 
   std::thread drogon_thread([]() {
       drogon::app().run();
