@@ -1,4 +1,6 @@
 
+#include <iox2/service_type.hpp>
+#include <iox2/waitset.hpp>
 #include <mignificient/orchestrator/orchestrator.hpp>
 
 #include <stdexcept>
@@ -15,12 +17,22 @@
 #include <mignificient/orchestrator/event.hpp>
 #include <mignificient/orchestrator/http.hpp>
 
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+#include <iox2/iceoryx2.hpp>
+#endif
+
 namespace mignificient { namespace orchestrator {
 
   bool Orchestrator::_quit;
   iox::popo::WaitSet<>* Orchestrator::_waitset_ptr;
   std::shared_ptr<HTTPServer> Orchestrator::_http_server;
+  ipc::IPCConfig Orchestrator::_ipc_config;
 
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+  std::optional<iox2::Node<iox2::ServiceType::Ipc>> Orchestrator::_iox2_node;
+#endif
+
+  // iceoryx1 callback: handle gpuless subscriber messages
   void handle_gpuless(iox::popo::Subscriber<int>* sub, Client* client)
   {
     while(client->gpuless_subscriber().hasData()) {
@@ -28,7 +40,7 @@ namespace mignificient { namespace orchestrator {
       auto res = client->gpuless_subscriber().take();
 
       if(*res.value().get() == static_cast<int>(GPUlessMessage::REGISTER)) {
-        spdlog::error("Received registration from gpuless server {}", client->id());
+        spdlog::info("Received registration from gpuless server {}", client->id());
         if(client->gpuless_active()) {
           client->gpu_instance()->schedule_next();
         }
@@ -42,22 +54,23 @@ namespace mignificient { namespace orchestrator {
     }
   }
 
+  // iceoryx1 callback: handle executor subscriber messages
   void handle_client(iox::popo::Subscriber<mignificient::executor::InvocationResult>* sub, Client* client)
   {
-    while(client->subscriber().hasData()) {
+    while(client->subscriber_v1().hasData()) {
 
-      auto res = client->subscriber().take();
+      auto res = client->subscriber_v1().take();
 
       if(res.value().get()->msg == executor::Message::FINISH) {
 
-        client->finished(std::string_view{reinterpret_cast<const char*>(res.value().get()->data.data()), res.value().get()->size});
+        client->finished(std::string_view{reinterpret_cast<const char*>(res.value().get()->data), res.value().get()->size});
 
       } else if (res.value().get()->msg == executor::Message::YIELD) {
 
         client->yield();
 
       } else {
-        spdlog::error("Received registration from gpuless executor {}", client->id());
+        spdlog::info("Received registration from gpuless executor {}", client->id());
         if(client->executor_active()) {
           client->gpu_instance()->schedule_next();
         }
@@ -65,9 +78,64 @@ namespace mignificient { namespace orchestrator {
     }
   }
 
-  void Orchestrator::_handle_http(iox::popo::UserTrigger*, Orchestrator* this_ptr)
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+  void handle_gpuless(Client* client)
   {
-    auto invocations = this_ptr->_http_trigger.get_invocations();
+    while(client->gpuless_subscriber_v2().has_samples()) {
+
+      auto res = client->gpuless_subscriber_v2().receive();
+      if(!res.has_value()) {
+        spdlog::error("Error receiving from gpuless subscriber for client {}, error {}", client->id(), res.error());
+      }
+
+      if(res.value()->payload() == static_cast<int>(GPUlessMessage::REGISTER)) {
+        spdlog::info("Received registration from gpuless server {}", client->id());
+        if(client->gpuless_active()) {
+          client->gpu_instance()->schedule_next();
+        }
+      } else if(res.value()->payload() == static_cast<int>(GPUlessMessage::SWAP_OFF_CONFIRM)) {
+        // FIXME: implement
+        throw std::runtime_error("unimplemented");
+      } else {
+        spdlog::error("Received unknown message from gpuless server, code: {}", res.value()->payload());
+      }
+
+    }
+  }
+
+  void handle_client(Client* client)
+  {
+    while(client->subscriber_v2().has_samples()) {
+
+      auto res = client->subscriber_v2().receive();
+      if(!res.has_value()) {
+        spdlog::error("Error receiving from gpuless subscriber for client {}, error {}", client->id(), res.error());
+      }
+
+      auto& payload = res.value()->payload();
+
+      if(payload.msg == executor::Message::FINISH) {
+
+        client->finished(std::string_view{reinterpret_cast<const char*>(payload.data), payload.size});
+
+      } else if (res.value()->payload().msg == executor::Message::YIELD) {
+
+        client->yield();
+
+      } else {
+        spdlog::info("Received registration from gpuless executor {}", client->id());
+        if(client->executor_active()) {
+          client->gpu_instance()->schedule_next();
+        }
+      }
+    }
+  }
+#endif
+
+  // iceoryx1: WaitSet callback for HTTP trigger
+  void Orchestrator::_handle_http_v1(iox::popo::UserTrigger*, Orchestrator* this_ptr)
+  {
+    auto invocations = this_ptr->_http_trigger_v1->get_invocations();
     SPDLOG_DEBUG("Received new HTTP invocation!");
 
     for(auto & invoc : invocations) {
@@ -76,7 +144,7 @@ namespace mignificient { namespace orchestrator {
 
       if(client) {
 
-        this_ptr->_waitset.attachEvent(
+        this_ptr->_waitset->attachEvent(
           client->gpuless_subscriber(),
           iox::popo::SubscriberEvent::DATA_RECEIVED,
           createNotificationCallback(handle_gpuless, *client)
@@ -87,8 +155,8 @@ namespace mignificient { namespace orchestrator {
           }
         );
 
-        this_ptr->_waitset.attachEvent(
-            client->subscriber(),
+        this_ptr->_waitset->attachEvent(
+            client->subscriber_v1(),
             iox::popo::SubscriberEvent::DATA_RECEIVED,
             createNotificationCallback(handle_client, *client)
         ).or_else(
@@ -104,32 +172,80 @@ namespace mignificient { namespace orchestrator {
 
   void Orchestrator::init(const Json::Value& config)
   {
-    iox::runtime::PoshRuntime::initRuntime(
-        iox::RuntimeName_t{iox::TruncateToCapacity_t{}, config["name"].asString().c_str()}
-    );
+    // Parse IPC configuration
+    _ipc_config = ipc::IPCConfig::from_json(config);
+
+    spdlog::info("IPC Backend: {}", _ipc_config.backend_string());
+    spdlog::info("Polling Mode: {}", _ipc_config.polling_mode_string());
+
+    // Log buffer configurations
+    for (const auto& [component, buf_config] : _ipc_config.buffer_configs) {
+      spdlog::info("Buffer config [{}]: request={} bytes, response={} bytes, capacity={}",
+                   component, buf_config.request_size, buf_config.response_size, buf_config.queue_capacity);
+    }
+
+    if (_ipc_config.backend == ipc::IPCBackend::ICEORYX_V1) {
+      iox::runtime::PoshRuntime::initRuntime(
+          iox::RuntimeName_t{iox::TruncateToCapacity_t{}, config["name"].asString().c_str()}
+      );
+    }
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+    else if (_ipc_config.backend == ipc::IPCBackend::ICEORYX_V2) {
+      auto node_result = iox2::NodeBuilder().create<iox2::ServiceType::Ipc>();
+      if(!node_result.has_value()) {
+        spdlog::error("Failed to create iceoryx2 Node: {}", static_cast<uint64_t>(node_result.error()));
+        throw std::runtime_error("Failed to create iceoryx2 Node");
+      }
+      spdlog::info("Created iceoryx2 Node for orchestrator");
+      _iox2_node = std::move(node_result.value());
+    }
+#endif
+    else {
+      abort();
+    }
   }
 
   Orchestrator::Orchestrator(const Json::Value& config, const std::string& device_db_path):
     _gpu_manager(device_db_path, sharing_model(config["sharing-model"].asString())),
-    _users(_gpu_manager, config["executor"])
+    _users(_gpu_manager, config["executor"], _ipc_config)
   {
-    _waitset_ptr = &_waitset;
 
     auto http_config = config["http"];
-    _http_server = std::make_shared<HTTPServer>(http_config, _http_trigger);
 
-    sigint.emplace(iox::posix::registerSignalHandler(iox::posix::Signal::INT, _sigHandler).expect("correct signal"));
-    sigterm.emplace(iox::posix::registerSignalHandler(iox::posix::Signal::TERM, _sigHandler).expect("correct signal"));
+    if (_ipc_config.backend == ipc::IPCBackend::ICEORYX_V1) {
 
-    _waitset.attachEvent(
-        _http_trigger.iceoryx_trigger(),
-        iox::popo::createNotificationCallback(Orchestrator::_handle_http, *this)
-    ).or_else(
-      [](auto) {
-        spdlog::error("Failed to attach subscriber");
-        std::exit(EXIT_FAILURE);
+      _waitset.emplace();
+      _waitset_ptr = &_waitset.value();
+
+      sigint.emplace(iox::posix::registerSignalHandler(iox::posix::Signal::INT, _sigHandler).expect("correct signal"));
+      sigterm.emplace(iox::posix::registerSignalHandler(iox::posix::Signal::TERM, _sigHandler).expect("correct signal"));
+
+      _http_trigger_v1.emplace();
+      _http_trigger_v1->register_trigger(*_waitset, iox::popo::createNotificationCallback(Orchestrator::_handle_http_v1, *this));
+
+      _http_server = std::make_shared<HTTPServer>(http_config, _http_trigger_v1.value());
+    }
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+    else if (_ipc_config.backend == ipc::IPCBackend::ICEORYX_V2) {
+
+      auto res = iox2::WaitSetBuilder()
+      .signal_handling_mode(iox2::SignalHandlingMode::HandleTerminationRequests)
+      .create<iox2::ServiceType::Ipc>();
+      if(!res.has_value()) {
+        spdlog::error("Failed to create iceoryx2 WaitSet: {}", static_cast<uint64_t>(res.error()));
+        throw std::runtime_error("Failed to create iceoryx2 WaitSet");
       }
-    );
+      _waitset_v2 = std::move(res.value());
+
+      _http_trigger_v2.emplace();
+      _http_trigger_v2->register_trigger(_waitset_v2.value());
+
+      _http_server = std::make_shared<HTTPServer>(http_config, _http_trigger_v2.value());
+    }
+#endif
+    else {
+      abort();
+    }
   }
 
   void Orchestrator::run()
@@ -146,41 +262,15 @@ namespace mignificient { namespace orchestrator {
   {
     Orchestrator::_quit = true;
 
-    if(Orchestrator::_waitset_ptr) {
-      Orchestrator::_waitset_ptr->markForDestruction();
+    if(_ipc_config.backend == ipc::IPCBackend::ICEORYX_V1) {
+      if(Orchestrator::_waitset_ptr) {
+        Orchestrator::_waitset_ptr->markForDestruction();
+      }
+
+      if(Orchestrator::_http_server) {
+        Orchestrator::_http_server->shutdown();
+      }
     }
-
-    if(Orchestrator::_http_server) {
-      Orchestrator::_http_server->shutdown();
-    }
-
-  }
-
-  void Orchestrator::add_client()
-  {
-    //std::string client_name = fmt::format("client_{}", _client_id);
-
-    //const auto & [client, _] = clients.emplace(
-    //  std::piecewise_construct,
-    //  std::forward_as_tuple(_client_id),
-    //  std::forward_as_tuple(client_name)
-    //);
-
-    ////_waitset.attachState(client->second.subscriber(), iox::popo::SubscriberEvent::DATA_RECEIVED, _client_id).or_else([](auto) {
-    //_waitset.attachEvent(
-    //    client->second.subscriber(),
-    //    //*client,
-    //    iox::popo::SubscriberEvent::DATA_RECEIVED,
-    //    //0,
-    //    createNotificationCallback(handle_client, client->second)//client->second.context())
-    //).or_else(
-    //  [](auto) {
-    //    spdlog::error("Failed to attach subscriber");
-    //    std::exit(EXIT_FAILURE);
-    //  }
-    //);
-
-    //_client_id++;
   }
 
   Client* Orchestrator::client(int id)
@@ -195,103 +285,105 @@ namespace mignificient { namespace orchestrator {
 
   void Orchestrator::event_loop()
   {
+    if (_ipc_config.backend == ipc::IPCBackend::ICEORYX_V1) {
+      _event_loop_v1();
+    }
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+    else {
+      _event_loop_v2();
+    }
+#endif
+  }
+
+  void Orchestrator::_event_loop_v1()
+  {
     while(!_quit)
     {
-      auto notificationVector = _waitset.wait();
+      auto notificationVector = _waitset->wait();
 
       for (auto& notification : notificationVector)
       {
-
         (*notification)();
-
-        //Context* ctx = static_cast<Context*>(notification->getUserDefinedContext());
-
-        //if(ctx->type == EventSource::CLIENT) {
-
-
-        //} else if (ctx->type == EventSource::HTTP) {
-        //  spdlog::info("New http message");
-        //}
-        //notification->getOrigin<typename T>()
-        //auto value = orchestrator.value().take();
-
-        //if(value.has_error()) {
-        //  std::cout << "got no data, return code: " << static_cast<uint64_t>(value.get_error()) << std::endl;
-        //} else {
-
-        //  last_message = value.value();
-        //  auto* ptr = static_cast<const Invocation*>(last_message);
-        //  return InvocationData{ptr->data.data(), ptr->data.size()};
-        //}
       }
-      //std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-
   }
 
-    //void loop()
-    //{
-    //// Create wait set
-    //iox::popo::WaitSet<> waitSet;
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
 
-    //// Create unordered_maps for clients and servers
-    //std::unordered_map<iox::popo::Subscriber<ClientData>*, ClientSubscriber> clientSubscribers;
-    //std::unordered_map<iox::popo::Subscriber<ServerData>*, ServerSubscriber> serverSubscribers;
+  void Orchestrator::_event_loop_v2()
+  {
+    auto res = _waitset_v2->wait_and_process(
+      [&](iox2::WaitSetAttachmentId<iox2::ServiceType::Ipc> attachment_id) {
 
-    //// Assume we have a way to know how many clients and servers we expect
-    //const int NUM_CLIENTS = 5;
-    //const int NUM_SERVERS = 3;
+        if (_http_trigger_v2->triggered(attachment_id)) {
+          _handle_http_v2();
+        } else {
 
-    //// Create and attach client subscribers
-    //for (int i = 0; i < NUM_CLIENTS; ++i) {
-    //    std::string id = "Client" + std::to_string(i);
-    //    auto [it, inserted] = clientSubscribers.emplace(std::piecewise_construct,
-    //        std::forward_as_tuple(nullptr),
-    //        std::forward_as_tuple(id));
-    //    it->first = &it->second.getSubscriber();
-    //    waitSet.attachState(*it->first, iox::popo::SubscriberState::HAS_DATA);
-    //}
+          auto val = _waitset_mappings_v2.find(attachment_id);
+          if(val == _waitset_mappings_v2.end()) {
+            spdlog::error("Received event for unknown attachment id");
+            return iox2::CallbackProgression::Continue;
+          }
 
-    //// Create and attach server subscribers
-    //for (int i = 0; i < NUM_SERVERS; ++i) {
-    //    std::string id = "Server" + std::to_string(i);
-    //    auto [it, inserted] = serverSubscribers.emplace(std::piecewise_construct,
-    //        std::forward_as_tuple(nullptr),
-    //        std::forward_as_tuple(id));
-    //    it->first = &it->second.getSubscriber();
-    //    waitSet.attachState(*it->first, iox::popo::SubscriberState::HAS_DATA);
-    //}
+          Client* client = std::get<0>(val->second);
+          if(std::get<1>(val->second)) {
 
-    //// Main event loop
-    //while (true) {
-    //    auto notificationVector = waitSet.wait();
+            while(client->read_event_client_v2()) {
+              handle_client(client);
+            }
 
-    //    for (auto& notification : notificationVector) {
-    //        auto& eventOrigin = notification.getOrigin();
+          } else {
+            while(client->read_event_gpuless_v2()) {
+              handle_gpuless(client);
+            }
+          }
 
-    //        // Check if it's a client notification
-    //        auto clientIt = clientSubscribers.find(static_cast<iox::popo::Subscriber<ClientData>*>(&eventOrigin));
-    //        if (clientIt != clientSubscribers.end()) {
-    //            std::cout << "Received notification from client: " << clientIt->second.getId() << std::endl;
-    //            // Process client notification
-    //            clientIt->second.processData();
-    //            continue;
-    //        }
+        }
 
-    //        // Check if it's a server notification
-    //        auto serverIt = serverSubscribers.find(static_cast<iox::popo::Subscriber<ServerData>*>(&eventOrigin));
-    //        if (serverIt != serverSubscribers.end()) {
-    //            std::cout << "Received notification from server: " << serverIt->second.getId() << std::endl;
-    //            // Process server notification
-    //            serverIt->second.processData();
-    //            continue;
-    //        }
+        return iox2::CallbackProgression::Continue;
+      }
+    );
 
-    //        // If we get here, it's an unknown notification
-    //        std::cerr << "Received notification from unknown source" << std::endl;
-    //    }
-    //}
-    //}
+    if(!res.has_value()) {
+      spdlog::error("Error in iceoryx2 event loop: {}", static_cast<uint64_t>(res.error()));
+    }
+    spdlog::info("Finished iceoryx2 event loop with status {}", res.value());
+
+    //_waitset_mappings_v2.clear();
+    //clients.clear();
+
+    //_http_trigger_v2.reset();
+    _http_trigger_v2->unregister_trigger();
+    _users.apply_clients(
+[](Client *client){
+        client->uninit_v2();
+      }
+    );
+
+    if(Orchestrator::_http_server) {
+      Orchestrator::_http_server->shutdown();
+    }
+  }
+
+  void Orchestrator::_handle_http_v2()
+  {
+    auto invocations = _http_trigger_v2->get_invocations();
+    SPDLOG_DEBUG("Received new HTTP invocation!");
+
+    for(auto & invoc : invocations) {
+
+      auto [client, success] = _users.process_invocation(std::move(invoc));
+
+      if(client) {
+
+        auto res = client->init_v2(*_waitset_v2);
+
+        _waitset_mappings_v2.insert(std::make_pair(std::move(res[0]), std::make_tuple(client, true)));
+        _waitset_mappings_v2.insert(std::make_pair(std::move(res[1]), std::make_tuple(client, false)));
+      }
+    }
+  }
+
+#endif // MIGNIFICIENT_WITH_ICEORYX2
 
 }}
-
