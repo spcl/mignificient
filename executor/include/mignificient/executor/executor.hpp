@@ -13,18 +13,24 @@
 
 #include "function.hpp"
 
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+#include <iox2/iceoryx2.hpp>
+#endif
+
 namespace mignificient { namespace executor {
 
   struct Invocation {
     // FIXME: replace with static array
     static constexpr int CAPACITY = 1 * 1024 * 1024;
+    static constexpr int ID_LEN = 64;
     //static constexpr int CAPACITY = 5 * 1024 * 1024;
     //static constexpr int CAPACITY = 10 * 1024;
     //iox::cxx::vector<uint8_t, CAPACITY> data;
     //std::array<uint8_t, CAPACITY> data;
     uint8_t data[CAPACITY];
     size_t size;
-    iox::string<64> id;
+    //iox::string<64> id;
+    char id[ID_LEN];
   };
 
   enum class Message {
@@ -38,7 +44,8 @@ namespace mignificient { namespace executor {
   struct InvocationResult {
     static constexpr int CAPACITY = 5 * 1024 * 1024;
     Message msg;
-    iox::vector<uint8_t, CAPACITY> data;
+    //iox::vector<uint8_t, CAPACITY> data;
+    uint8_t data[CAPACITY];
     size_t size;
   };
 
