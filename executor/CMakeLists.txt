@@ -13,7 +13,14 @@ add_dependencies(executor_lib spdlog)
 target_link_libraries(executor_lib
   spdlog::spdlog
   iceoryx_posh::iceoryx_posh
+  mignificient_common
 )
+
+# Conditionally link iceoryx2
+if(BUILD_ICEORYX2)
+  target_link_libraries(executor_lib iceoryx2-cxx::static-lib-cxx)
+endif()
+
 set_target_properties(executor_lib PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_executable(executor_cpp
