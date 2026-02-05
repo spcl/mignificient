@@ -1,6 +1,7 @@
 #ifndef __MIGNIFICIENT_ORCHESTRATOR_CLIENT_HPP__
 #define __MIGNIFICIENT_ORCHESTRATOR_CLIENT_HPP__
 
+#include <optional>
 #include <queue>
 
 #include <iceoryx_posh/popo/subscriber.hpp>
@@ -81,19 +82,20 @@ namespace mignificient { namespace orchestrator {
 #ifdef MIGNIFICIENT_WITH_ICEORYX2
   struct CommunicationIceoryxV2
   {
-    std::optional<iox2::PortFactoryEvent<iox2::ServiceType::Ipc>> client_event;
+    std::optional<iox2::PortFactoryEvent<iox2::ServiceType::Ipc>> client_event_notify;
+    std::optional<iox2::PortFactoryEvent<iox2::ServiceType::Ipc>> client_event_listen;
     std::optional<iox2::Publisher<iox2::ServiceType::Ipc, mignificient::executor::Invocation, void>> client_send;
     std::optional<iox2::Subscriber<iox2::ServiceType::Ipc, mignificient::executor::InvocationResult, void>> client_recv;
     std::optional<iox2::Listener<iox2::ServiceType::Ipc>> client_listener;
+    std::optional<iox2::Notifier<iox2::ServiceType::Ipc>> client_notifier;
     std::optional<iox2::WaitSetGuard<iox2::ServiceType::Ipc>> client_listener_guard;
 
-    std::optional<iox2::PortFactoryEvent<iox2::ServiceType::Ipc>> gpuless_event;
-    std::optional<iox2::Publisher<iox2::ServiceType::Ipc, int, void>> gpuless_send;
-    std::optional<iox2::Subscriber<iox2::ServiceType::Ipc, int, void>> gpuless_recv;
+    std::optional<iox2::PortFactoryEvent<iox2::ServiceType::Ipc>> gpuless_event_notify;
+    std::optional<iox2::PortFactoryEvent<iox2::ServiceType::Ipc>> gpuless_event_listen;
+    std::optional<iox2::Notifier<iox2::ServiceType::Ipc>> gpuless_notifier;
     std::optional<iox2::Listener<iox2::ServiceType::Ipc>> gpuless_listener;
     std::optional<iox2::WaitSetGuard<iox2::ServiceType::Ipc>> gpuless_listener_guard;
 
-    std::optional<iox2::SampleMutUninit<iox2::ServiceType::Ipc, int, void>> gpuless_payload;
     std::optional<iox2::SampleMutUninit<iox2::ServiceType::Ipc, mignificient::executor::Invocation, void>> client_payload;
 
     CommunicationIceoryxV2(const std::string& id);
@@ -161,10 +163,6 @@ namespace mignificient { namespace orchestrator {
     }
 
 #ifdef MIGNIFICIENT_WITH_ICEORYX2
-    iox2::Subscriber<iox2::ServiceType::Ipc, int, void>& gpuless_subscriber_v2()
-    {
-      return _comm_v2->gpuless_recv.value();
-    }
 
     std::array<iox2::WaitSetAttachmentId<iox2::ServiceType::Ipc>, 2> init_v2(iox2::WaitSet<iox2::ServiceType::Ipc>& waitset)
     {
@@ -200,21 +198,29 @@ namespace mignificient { namespace orchestrator {
     {
       auto res = _comm_v2->client_listener->try_wait_one();
       if(res.has_value()) {
-        return true;
+        if(res.value().has_value()) {
+          return true;
+        } else {
+          return false;
+        }
       } else {
         spdlog::error("Failed to read executor event for client {}, error {}", _id, res.error());
         return false;
       }
     }
 
-    bool read_event_gpuless_v2()
+    std::optional<size_t> read_event_gpuless_v2()
     {
       auto res = _comm_v2->gpuless_listener->try_wait_one();
       if(res.has_value()) {
-        return true;
+        if(res.value().has_value()) {
+          return res.value()->as_value();
+        } else {
+          return std::nullopt;
+        }
       } else {
         spdlog::error("Failed to read gpuless event for client {}, error {}", _id, res.error());
-        return false;
+        return std::nullopt;
       }
     }
 #endif
@@ -233,14 +239,7 @@ namespace mignificient { namespace orchestrator {
 
         auto& comm_backend = _comm_v2.value();
 
-        comm_backend.gpuless_payload->payload_mut() = static_cast<int>(msg);
-        auto initialized_sample = comm_backend.gpuless_payload.value().write_payload(static_cast<int>(msg));
-        auto res = iox2::send(std::move(initialized_sample));
-        if(!res.has_value()) {
-          spdlog::error("Failed to send gpuless message: {}", static_cast<uint64_t>(res.error()));
-        }
-
-        comm_backend.gpuless_payload = comm_backend.gpuless_send.value().loan_uninit().value();
+        comm_backend.gpuless_notifier->notify_with_custom_event_id(iox2::EventId{static_cast<int>(msg)});
       }
 #endif
       else {
@@ -356,9 +355,19 @@ namespace mignificient { namespace orchestrator {
 
         auto initialized_sample = iox2::assume_init(std::move(comm_backend.client_payload.value()));
 
-        auto res = iox2::send(std::move(initialized_sample));
-        if(!res.has_value()) {
-          spdlog::error("Failed to send gpuless message: {}", static_cast<uint64_t>(res.error()));
+        SPDLOG_DEBUG("[Client] Activate gpuless executor for {}", _id);
+        {
+          auto res = iox2::send(std::move(initialized_sample));
+          if(!res.has_value()) {
+            spdlog::error("Failed to send executor message: {}", static_cast<uint64_t>(res.error()));
+          }
+        }
+
+        {
+          auto res = comm_backend.client_notifier->notify();
+          if(!res.has_value()) {
+            spdlog::error("Failed to send executor notification: {}", static_cast<uint64_t>(res.error()));
+          }
         }
 
         comm_backend.client_payload = comm_backend.client_send.value().loan_uninit().value();

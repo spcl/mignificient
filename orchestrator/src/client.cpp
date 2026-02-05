@@ -34,44 +34,49 @@ namespace mignificient { namespace orchestrator {
         client_recv = std::move(sub_result.value());
       }
 
-      auto exec_event_service = node.service_builder(
-          iox2::ServiceName::create(fmt::format("{}.Orchestrator.Client", id).c_str()).value())
-      .event().open_or_create();
-      if (exec_event_service.has_value()) {
-        client_event = std::move(exec_event_service.value());
+      {
+        auto exec_event_service = node.service_builder(
+            iox2::ServiceName::create(fmt::format("{}.Orchestrator.Client.Notify", id).c_str()).value())
+        .event().open_or_create();
+        if (exec_event_service.has_value()) {
+          client_event_notify = std::move(exec_event_service.value());
+        }
       }
 
-      client_listener = client_event->listener_builder().create().value();
+      {
+        auto exec_event_service = node.service_builder(
+            iox2::ServiceName::create(fmt::format("{}.Orchestrator.Client.Listen", id).c_str()).value())
+        .event().open_or_create();
+        if (exec_event_service.has_value()) {
+          client_event_listen = std::move(exec_event_service.value());
+        }
+      }
+
+      client_listener = client_event_listen->listener_builder().create().value();
+      client_notifier = client_event_notify->notifier_builder().create().value();
       client_payload = client_send.value().loan_uninit().value();
     }
 
     {
-      auto exec_send_service = node.service_builder(
-          iox2::ServiceName::create(fmt::format("{}.Orchestrator.Gpuless", id).c_str()).value())
-      .publish_subscribe<int>()
-      .max_publishers(1)
-      .max_subscribers(1)
-      .open_or_create().value();
-
-      auto pub_result = exec_send_service.publisher_builder().create();
-      if (pub_result.has_value()) {
-        gpuless_send = std::move(pub_result.value());
+      {
+        auto exec_event_service = node.service_builder(
+            iox2::ServiceName::create(fmt::format("{}.Orchestrator.Gpuless.Notify", id).c_str()).value())
+        .event().open_or_create();
+        if (exec_event_service.has_value()) {
+          gpuless_event_notify = std::move(exec_event_service.value());
+        }
+      }
+      {
+        auto exec_event_service = node.service_builder(
+            iox2::ServiceName::create(fmt::format("{}.Orchestrator.Gpuless.Listen", id).c_str()).value())
+        .event().open_or_create();
+        if (exec_event_service.has_value()) {
+          gpuless_event_listen = std::move(exec_event_service.value());
+        }
       }
 
-      auto sub_result = exec_send_service.subscriber_builder().create();
-      if (sub_result.has_value()) {
-        gpuless_recv = std::move(sub_result.value());
-      }
-
-      auto exec_event_service = node.service_builder(
-          iox2::ServiceName::create(fmt::format("{}.Orchestrator.Gpuless", id).c_str()).value())
-      .event().open_or_create();
-      if (exec_event_service.has_value()) {
-        gpuless_event = std::move(exec_event_service.value());
-      }
-
-      gpuless_listener = gpuless_event->listener_builder().create().value();
-      gpuless_payload = gpuless_send.value().loan_uninit().value();
+      gpuless_listener = gpuless_event_listen->listener_builder().create().value();
+      gpuless_notifier = gpuless_event_notify->notifier_builder().create().value();
     }
 
   }

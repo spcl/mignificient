@@ -1,6 +1,4 @@
 
-#include <iox2/service_type.hpp>
-#include <iox2/waitset.hpp>
 #include <mignificient/orchestrator/orchestrator.hpp>
 
 #include <stdexcept>
@@ -12,12 +10,15 @@
 #include <json/value.h>
 #include <spdlog/spdlog.h>
 
+#include <mignificient/ipc/config.hpp>
 #include <mignificient/executor/executor.hpp>
 #include <mignificient/orchestrator/client.hpp>
 #include <mignificient/orchestrator/event.hpp>
 #include <mignificient/orchestrator/http.hpp>
 
 #ifdef MIGNIFICIENT_WITH_ICEORYX2
+#include <iox2/service_type.hpp>
+#include <iox2/waitset.hpp>
 #include <iox2/iceoryx2.hpp>
 #endif
 
@@ -70,7 +71,7 @@ namespace mignificient { namespace orchestrator {
         client->yield();
 
       } else {
-        spdlog::info("Received registration from gpuless executor {}", client->id());
+        spdlog::info("Received registration from executor {}", client->id());
         if(client->executor_active()) {
           client->gpu_instance()->schedule_next();
         }
@@ -79,54 +80,48 @@ namespace mignificient { namespace orchestrator {
   }
 
 #ifdef MIGNIFICIENT_WITH_ICEORYX2
-  void handle_gpuless(Client* client)
+  void handle_gpuless(int msg, Client* client)
   {
-    while(client->gpuless_subscriber_v2().has_samples()) {
 
-      auto res = client->gpuless_subscriber_v2().receive();
-      if(!res.has_value()) {
-        spdlog::error("Error receiving from gpuless subscriber for client {}, error {}", client->id(), res.error());
+    if(msg == static_cast<int>(GPUlessMessage::REGISTER)) {
+      spdlog::info("Received registration from gpuless server {}", client->id());
+      if(client->gpuless_active()) {
+        client->gpu_instance()->schedule_next();
       }
-
-      if(res.value()->payload() == static_cast<int>(GPUlessMessage::REGISTER)) {
-        spdlog::info("Received registration from gpuless server {}", client->id());
-        if(client->gpuless_active()) {
-          client->gpu_instance()->schedule_next();
-        }
-      } else if(res.value()->payload() == static_cast<int>(GPUlessMessage::SWAP_OFF_CONFIRM)) {
-        // FIXME: implement
-        throw std::runtime_error("unimplemented");
-      } else {
-        spdlog::error("Received unknown message from gpuless server, code: {}", res.value()->payload());
-      }
-
+    } else if(msg == static_cast<int>(GPUlessMessage::SWAP_OFF_CONFIRM)) {
+      // FIXME: implement
+      throw std::runtime_error("unimplemented");
+    } else {
+      spdlog::error("Received unknown message from gpuless server, code: {}", msg);
     }
+
   }
 
   void handle_client(Client* client)
   {
-    while(client->subscriber_v2().has_samples()) {
+    auto res = client->subscriber_v2().receive();
+    if(!res.has_value()) {
+      spdlog::error("Error receiving from gpuless subscriber for client {}, error {}", client->id(), res.error());
+    }
 
-      auto res = client->subscriber_v2().receive();
-      if(!res.has_value()) {
-        spdlog::error("Error receiving from gpuless subscriber for client {}, error {}", client->id(), res.error());
-      }
+    if(!res.value().has_value()) {
+      return;
+    }
 
-      auto& payload = res.value()->payload();
+    auto& payload = res.value()->payload();
 
-      if(payload.msg == executor::Message::FINISH) {
+    if(payload.msg == executor::Message::FINISH) {
 
-        client->finished(std::string_view{reinterpret_cast<const char*>(payload.data), payload.size});
+      client->finished(std::string_view{reinterpret_cast<const char*>(payload.data), payload.size});
 
-      } else if (res.value()->payload().msg == executor::Message::YIELD) {
+    } else if (res.value()->payload().msg == executor::Message::YIELD) {
 
-        client->yield();
+      client->yield();
 
-      } else {
-        spdlog::info("Received registration from gpuless executor {}", client->id());
-        if(client->executor_active()) {
-          client->gpu_instance()->schedule_next();
-        }
+    } else {
+      spdlog::info("Received registration from executor {}", client->id());
+      if(client->executor_active()) {
+        client->gpu_instance()->schedule_next();
       }
     }
   }
@@ -175,7 +170,7 @@ namespace mignificient { namespace orchestrator {
     // Parse IPC configuration
     _ipc_config = ipc::IPCConfig::from_json(config);
 
-    spdlog::info("IPC Backend: {}", _ipc_config.backend_string());
+    spdlog::info("IPC Backend: {}", ipc::IPCConfig::backend_string(_ipc_config.backend));
     spdlog::info("Polling Mode: {}", _ipc_config.polling_mode_string());
 
     // Log buffer configurations
@@ -289,10 +284,13 @@ namespace mignificient { namespace orchestrator {
       _event_loop_v1();
     }
 #ifdef MIGNIFICIENT_WITH_ICEORYX2
-    else {
+    else if (_ipc_config.backend == ipc::IPCBackend::ICEORYX_V2) {
       _event_loop_v2();
     }
 #endif
+    else {
+      abort();
+    }
   }
 
   void Orchestrator::_event_loop_v1()
@@ -333,8 +331,9 @@ namespace mignificient { namespace orchestrator {
             }
 
           } else {
-            while(client->read_event_gpuless_v2()) {
-              handle_gpuless(client);
+            std::optional<size_t> gpuless_msg{};
+            while((gpuless_msg = client->read_event_gpuless_v2())) {
+              handle_gpuless(gpuless_msg.value(), client);
             }
           }
 
@@ -349,10 +348,7 @@ namespace mignificient { namespace orchestrator {
     }
     spdlog::info("Finished iceoryx2 event loop with status {}", res.value());
 
-    //_waitset_mappings_v2.clear();
-    //clients.clear();
-
-    //_http_trigger_v2.reset();
+    // We need to deallocate listeners before we destroy the waitset
     _http_trigger_v2->unregister_trigger();
     _users.apply_clients(
 [](Client *client){
