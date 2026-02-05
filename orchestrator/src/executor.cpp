@@ -10,7 +10,7 @@
 namespace mignificient { namespace orchestrator {
 
   bool GPUlessServer::start(
-    const std::string& user_id, GPUInstance& instance,
+    ipc::IPCBackend backend, const std::string& user_id, GPUInstance& instance,
     bool poll_sleep, bool use_vmm,
     const Json::Value& config, int cpu_idx
   )
@@ -31,7 +31,9 @@ namespace mignificient { namespace orchestrator {
     };
 
     std::string cpu_idx_str = fmt::format("CPU_BIND_IDX={}", cpu_idx);
+    std::string ipc_backend = fmt::format("IPC_BACKEND={}", ipc::IPCConfig::backend_string(backend));
     std::vector<char*> envs;
+    envs.emplace_back(const_cast<char*>(ipc_backend.c_str()));
     if(cpu_idx != -1) {
       envs.emplace_back(const_cast<char*>(cpu_idx_str.c_str()));
     }
@@ -87,6 +89,7 @@ namespace mignificient { namespace orchestrator {
 
     std::string exec_type = "EXECUTOR_TYPE=shmem";
     std::string container_name = fmt::format("CONTAINER_NAME={}", _user);
+    std::string ipc_backend = fmt::format("IPC_BACKEND={}", ipc::IPCConfig::backend_string(_backend));
     std::string cpu_idx_str = fmt::format("CPU_BIND_IDX={}", cpu_idx);
 
     std::string gpuless_elf_path = fmt::format("GPULESS_ELF_DEFINITION={}.txt", _function_path);
@@ -101,6 +104,7 @@ namespace mignificient { namespace orchestrator {
     envs.add(const_cast<char*>(exec_type.c_str()));
     envs.add(const_cast<char*>(container_name.c_str()));
     envs.add(const_cast<char*>(gpuless_elf_path.c_str()));
+    envs.add(const_cast<char*>(ipc_backend.c_str()));
     if(cpu_idx != -1) {
       envs.add(const_cast<char*>(cpu_idx_str.c_str()));
     }
@@ -155,6 +159,7 @@ namespace mignificient { namespace orchestrator {
     std::string container_name = fmt::format("CONTAINER_NAME={}", _user);
     std::string cpu_idx_str = fmt::format("CPU_BIND_IDX={}", cpu_idx);
     std::string gpuless_elf_path = fmt::format("GPULESS_ELF_DEFINITION={}", _cubin_analysis);
+    std::string ipc_backend = fmt::format("IPC_BACKEND={}", ipc::IPCConfig::backend_string(_backend));
 
     std::string preload;
     if(_ld_preload.has_value()) {
@@ -174,6 +179,7 @@ namespace mignificient { namespace orchestrator {
     envs.add(const_cast<char*>(container_name.c_str()));
     envs.add(const_cast<char*>(pythonpath.c_str()));
     envs.add(const_cast<char*>(gpuless_elf_path.c_str()));
+    envs.add(const_cast<char*>(ipc_backend.c_str()));
     if(cpu_idx != -1) {
       envs.add(const_cast<char*>(cpu_idx_str.c_str()));
     }

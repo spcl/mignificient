@@ -182,7 +182,7 @@ namespace mignificient { namespace orchestrator {
 
       GPUlessServer gpuless_server;
       gpuless_server.start(
-        client_id, *selected_gpu,
+        _ipc_config.backend, client_id, *selected_gpu,
         _config["poll-gpuless-sleep"].asBool(),
         _config["use-vmm"].asBool(),
         _config["bare-metal-executor"], gpuless_cpu_idx
@@ -192,7 +192,7 @@ namespace mignificient { namespace orchestrator {
       if(invocation->language() == Language::CPP) {
 
         auto exec = std::make_unique<BareMetalExecutorCpp>(
-          client_id, fname, invocation->function_path(),
+          _ipc_config.backend, client_id, fname, invocation->function_path(),
           invocation->gpu_memory(), *selected_gpu, _config["bare-metal-executor"],
           invocation->ld_preload()
         );
@@ -202,7 +202,7 @@ namespace mignificient { namespace orchestrator {
       } else {
 
         auto exec = std::make_unique<BareMetalExecutorPython>(
-          client_id, fname, invocation->function_path(),
+          _ipc_config.backend, client_id, fname, invocation->function_path(),
           invocation->cuda_binary(), invocation->cubin_analysis(),
           invocation->gpu_memory(), *selected_gpu,
           _config["bare-metal-executor"],

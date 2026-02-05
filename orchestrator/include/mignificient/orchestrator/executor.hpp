@@ -11,6 +11,8 @@
 #include <spdlog/fmt/bundled/core.h>
 #include <json/value.h>
 
+#include <mignificient/ipc/config.hpp>
+
 extern "C" char **environ;
 
 namespace mignificient { namespace orchestrator {
@@ -33,7 +35,7 @@ namespace mignificient { namespace orchestrator {
   class GPUlessServer {
   public:
 
-    bool start(const std::string& user_id, GPUInstance& instance, bool poll_sleep, bool use_vmm, const Json::Value& config, int cpu_idx = -1);
+    bool start(ipc::IPCBackend backend, const std::string& user_id, GPUInstance& instance, bool poll_sleep, bool use_vmm, const Json::Value& config, int cpu_idx = -1);
 
   private:
     pid_t _pid;
@@ -95,7 +97,8 @@ namespace mignificient { namespace orchestrator {
 
   class Executor {
   public:
-      Executor(const std::string& user, const std::string& function, float gpu_memory, GPUInstance& device, const std::optional<std::string>& ld_preload):
+      Executor(ipc::IPCBackend backend, const std::string& user, const std::string& function, float gpu_memory, GPUInstance& device, const std::optional<std::string>& ld_preload):
+        _backend(backend),
         _user(user),
         _gpu_memory(gpu_memory),
         _ld_preload(ld_preload),
@@ -127,6 +130,7 @@ namespace mignificient { namespace orchestrator {
       }
 
   protected:
+      ipc::IPCBackend _backend;
       std::string _user;
       std::optional<std::string> _ld_preload;
       float _gpu_memory;
@@ -140,12 +144,12 @@ namespace mignificient { namespace orchestrator {
     using Executor::Executor;
 
     BareMetalExecutorCpp(
-      const std::string& user_id, const std::string& function,
+      ipc::IPCBackend backend, const std::string& user_id, const std::string& function,
       const std::string& function_path,
       float gpu_memory, GPUInstance& device, const Json::Value& config,
       std::optional<std::string> ld_preload
     ):
-      Executor(user_id, function, gpu_memory, device, ld_preload),
+      Executor(backend, user_id, function, gpu_memory, device, ld_preload),
       _function_path(function_path),
       _cpp_executor(config["cpp"].asString()),
       _gpuless_lib(config["gpuless-lib"].asString())
@@ -164,6 +168,7 @@ namespace mignificient { namespace orchestrator {
     using Executor::Executor;
 
     BareMetalExecutorPython(
+        ipc::IPCBackend backend,
         const std::string& user_id,
         const std::string& function,
         const std::string& function_path,
@@ -174,7 +179,7 @@ namespace mignificient { namespace orchestrator {
         const Json::Value& config,
         std::optional<std::string> ld_preload
     ):
-      Executor(user_id, function, gpu_memory, device, ld_preload),
+      Executor(backend, user_id, function, gpu_memory, device, ld_preload),
       _function_path(function_path),
       _cuda_binary(cuda_binary),
       _cubin_analysis(cubin_analysis),
@@ -199,8 +204,8 @@ namespace mignificient { namespace orchestrator {
   class SarusContainerExecutorCpp : public Executor {
   public:
       using Executor::Executor;
-    SarusContainerExecutorCpp(const std::string& user_id, const std::string& function, const std::string& function_path, float gpu_memory, GPUInstance& device, const Json::Value& config, const std::optional<std::string>& ld_preload):
-      Executor(user_id, function, gpu_memory, device, ld_preload),
+    SarusContainerExecutorCpp(ipc::IPCBackend backend, const std::string& user_id, const std::string& function, const std::string& function_path, float gpu_memory, GPUInstance& device, const Json::Value& config, const std::optional<std::string>& ld_preload):
+      Executor(backend, user_id, function, gpu_memory, device, ld_preload),
       _function_path(function_path),
       _cpp_executor(config["cpp"].asString()),
       _gpuless_lib(config["gpuless-lib"].asString())
