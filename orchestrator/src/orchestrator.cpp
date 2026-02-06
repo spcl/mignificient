@@ -171,7 +171,7 @@ namespace mignificient { namespace orchestrator {
     _ipc_config = ipc::IPCConfig::from_json(config);
 
     spdlog::info("IPC Backend: {}", ipc::IPCConfig::backend_string(_ipc_config.backend));
-    spdlog::info("Polling Mode: {}", _ipc_config.polling_mode_string());
+    spdlog::info("Polling Mode: {}", ipc::IPCConfig::polling_mode_string(_ipc_config.polling_mode));
 
     // Log buffer configurations
     for (const auto& [component, buf_config] : _ipc_config.buffer_configs) {
