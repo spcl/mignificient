@@ -1,6 +1,33 @@
 {
   "name": "mignificient-orchestrator",
   "sharing-model": "sequential",
+  "ipc": {
+    "backend": "iceoryx2",
+    "buffer-config": {
+      "orchestrator-executor": {
+        "invocation-size": 1048576,
+        "result-size": 5242880,
+        "queue-capacity": 10,
+        "history-size": 0
+      },
+      "orchestrator-gpuless": {
+        "request-size": 32,
+        "response-size": 32,
+        "queue-capacity": 5,
+        "history-size": 0
+      },
+      "gpuless-executor": {
+        "request-size": 1048576,
+        "response-size": 1048576,
+        "queue-capacity": 200,
+        "history-size": 0
+      }
+    },
+    "polling": {
+      "mode": "wait",
+      "poll-interval-us": 100
+    }
+  },
   "http": {
     "port": 10000,
     "threads": 1
@@ -10,8 +37,8 @@
     "use-vmm": true,
     "poll-sleep": true,
     "poll-gpuless-sleep": true,
-    "cpu-bind-executor": true,
-    "cpu-bind-gpuless": true,
+    "cpu-bind-executor": false,
+    "cpu-bind-gpuless": false,
     "cpu-bind-gpuless-separate": false,
     "bare-metal-executor": {
       "cpp": "${BARE_METAL_EXECUTOR_CPP}",
