@@ -13,9 +13,17 @@ if __name__ == "__main__":
     function_name = os.environ["FUNCTION_NAME"]
     container_name = os.environ["CONTAINER_NAME"]
 
+    ipc_backend = os.environ["IPC_BACKEND"]
+    if ipc_backend == "iceoryx1":
+        ipc_backend = mignificient.IPCBackend.ICEORYX_V1
+    elif ipc_backend == "iceoryx2":
+        ipc_backend = mignificient.IPCBackend.ICEORYX_V2
+    else:
+        raise RuntimeError(f"Unknown IPC backend: {ipc_backend}")
+
     func = None
 
-    runtime = mignificient.Runtime(container_name)
+    runtime = mignificient.Runtime(ipc_backend, container_name)
     runtime.register_runtime()
 
     while True:

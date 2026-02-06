@@ -10,7 +10,7 @@
 namespace mignificient { namespace orchestrator {
 
   bool GPUlessServer::start(
-    const std::string& user_id, GPUInstance& instance,
+    const ipc::IPCConfig& ipc_config, const std::string& user_id, GPUInstance& instance,
     bool poll_sleep, bool use_vmm,
     const Json::Value& config, int cpu_idx
   )
@@ -31,10 +31,23 @@ namespace mignificient { namespace orchestrator {
     };
 
     std::string cpu_idx_str = fmt::format("CPU_BIND_IDX={}", cpu_idx);
+    std::string ipc_backend = fmt::format("IPC_BACKEND={}", ipc::IPCConfig::backend_string(ipc_config.backend));
+
     std::vector<char*> envs;
+    envs.emplace_back(const_cast<char*>(ipc_backend.c_str()));
     if(cpu_idx != -1) {
       envs.emplace_back(const_cast<char*>(cpu_idx_str.c_str()));
     }
+
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+    std::string req_size = fmt::format("GPULESS_REQUEST_SIZE={}", ipc_config.buffer_configs.at("gpuless-executor").request_size);
+    std::string resp_size = fmt::format("GPULESS_RESPONSE_SIZE={}", ipc_config.buffer_configs.at("gpuless-executor").response_size);
+    std::string queue_cap = fmt::format("GPULESS_QUEUE_CAPACITY={}", ipc_config.buffer_configs.at("gpuless-executor").queue_capacity);
+    envs.emplace_back(const_cast<char*>(req_size.c_str()));
+    envs.emplace_back(const_cast<char*>(resp_size.c_str()));
+    envs.emplace_back(const_cast<char*>(queue_cap.c_str()));
+#endif
+
     envs.emplace_back(nullptr);
 
     posix_spawnattr_t attr;
@@ -67,6 +80,23 @@ namespace mignificient { namespace orchestrator {
     posix_spawn_file_actions_destroy(&file_actions);
 
     return true;
+  }
+
+  void Executor::_configure_backends(Environment& envs)
+  {
+    temporary_envs.clear();
+
+    temporary_envs.push_back(fmt::format("IPC_BACKEND={}", ipc::IPCConfig::backend_string(_ipc_config.backend)));
+    envs.add(const_cast<char*>(temporary_envs.back().c_str()));
+
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+    temporary_envs.push_back(fmt::format("GPULESS_REQUEST_SIZE={}", _ipc_config.buffer_configs.at("gpuless-executor").request_size));
+    envs.add(const_cast<char*>(temporary_envs.back().c_str()));
+    temporary_envs.push_back(fmt::format("GPULESS_RESPONSE_SIZE={}", _ipc_config.buffer_configs.at("gpuless-executor").response_size));
+    envs.add(const_cast<char*>(temporary_envs.back().c_str()));
+    temporary_envs.push_back(fmt::format("GPULESS_QUEUE_CAPACITY={}", _ipc_config.buffer_configs.at("gpuless-executor").queue_capacity));
+    envs.add(const_cast<char*>(temporary_envs.back().c_str()));
+#endif
   }
 
   bool BareMetalExecutorCpp::start(bool poll_sleep, int cpu_idx)
@@ -104,6 +134,9 @@ namespace mignificient { namespace orchestrator {
     if(cpu_idx != -1) {
       envs.add(const_cast<char*>(cpu_idx_str.c_str()));
     }
+
+    _configure_backends(envs);
+
     envs.add(nullptr);
 
     posix_spawnattr_t attr;
@@ -174,6 +207,9 @@ namespace mignificient { namespace orchestrator {
     envs.add(const_cast<char*>(container_name.c_str()));
     envs.add(const_cast<char*>(pythonpath.c_str()));
     envs.add(const_cast<char*>(gpuless_elf_path.c_str()));
+
+    _configure_backends(envs);
+
     if(cpu_idx != -1) {
       envs.add(const_cast<char*>(cpu_idx_str.c_str()));
     }

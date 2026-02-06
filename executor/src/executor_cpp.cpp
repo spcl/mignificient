@@ -37,8 +37,9 @@ fptr load_function()
 int main(int argc, char **argv)
 {
   std::string container_name{std::getenv("CONTAINER_NAME")};
+  std::string ipc_backend{std::getenv("IPC_BACKEND")};
 
-  mignificient::executor::Runtime runtime{container_name};
+  mignificient::executor::Runtime runtime{mignificient::ipc::IPCConfig::convert_ipc_backend(ipc_backend), container_name};
   runtime.register_runtime();
 
   // Get killed on parent's death

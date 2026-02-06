@@ -17,9 +17,10 @@ namespace mignificient { namespace orchestrator {
   class Users {
   public:
 
-    Users(GPUManager& gpu_manager, const Json::Value& config):
+    Users(GPUManager& gpu_manager, const Json::Value& config, const ipc::IPCConfig& ipc_config):
       _config(config),
-      _gpu_manager(gpu_manager)
+      _gpu_manager(gpu_manager),
+      _ipc_config(ipc_config)
     {
 
     }
@@ -133,13 +134,31 @@ namespace mignificient { namespace orchestrator {
       return std::make_tuple(new_client_created ? selected_client : nullptr, true);
     }
 
+    template<typename F>
+    void apply_clients(F func)
+    {
+      for(auto& [username, clients] : _gpu_clients) {
+        for(auto& client : clients) {
+          func(client.get());
+        }
+      }
+    }
+
   private:
 
     Client* allocate(const std::string& username, const std::string& fname, ActiveInvocation* invocation, GPUInstance* selected_gpu)
     {
-      // Create a new client
+      // Create a new client with configured buffer sizes
       std::string client_id = unique_client_name(username, fname);
-      _gpu_clients[username].push_back(std::make_unique<Client>(client_id, fname));
+
+      ipc::BufferConfig executor_buf;
+      ipc::BufferConfig gpuless_buf;
+      auto it_exec = _ipc_config.buffer_configs.find("orchestrator-executor");
+      if (it_exec != _ipc_config.buffer_configs.end()) executor_buf = it_exec->second;
+      auto it_gpuless = _ipc_config.buffer_configs.find("orchestrator-gpuless");
+      if (it_gpuless != _ipc_config.buffer_configs.end()) gpuless_buf = it_gpuless->second;
+
+      _gpu_clients[username].push_back(std::make_unique<Client>(_ipc_config.backend, client_id, fname, executor_buf, gpuless_buf));
       auto selected_client = _gpu_clients[username].back().get();
 
       SPDLOG_DEBUG("Allocate a new client {} for user {}", client_id, username);
@@ -163,7 +182,7 @@ namespace mignificient { namespace orchestrator {
 
       GPUlessServer gpuless_server;
       gpuless_server.start(
-        client_id, *selected_gpu,
+        _ipc_config, client_id, *selected_gpu,
         _config["poll-gpuless-sleep"].asBool(),
         _config["use-vmm"].asBool(),
         _config["bare-metal-executor"], gpuless_cpu_idx
@@ -173,7 +192,7 @@ namespace mignificient { namespace orchestrator {
       if(invocation->language() == Language::CPP) {
 
         auto exec = std::make_unique<BareMetalExecutorCpp>(
-          client_id, fname, invocation->function_path(),
+          _ipc_config, client_id, fname, invocation->function_path(),
           invocation->gpu_memory(), *selected_gpu, _config["bare-metal-executor"],
           invocation->ld_preload()
         );
@@ -183,7 +202,7 @@ namespace mignificient { namespace orchestrator {
       } else {
 
         auto exec = std::make_unique<BareMetalExecutorPython>(
-          client_id, fname, invocation->function_path(),
+          _ipc_config, client_id, fname, invocation->function_path(),
           invocation->cuda_binary(), invocation->cubin_analysis(),
           invocation->gpu_memory(), *selected_gpu,
           _config["bare-metal-executor"],
@@ -204,6 +223,7 @@ namespace mignificient { namespace orchestrator {
 
     const Json::Value& _config;
     GPUManager& _gpu_manager;
+    const ipc::IPCConfig& _ipc_config;
 
     int _index = 0;
     // TODO: this might require extension to support platforms where hyperthreads have consecutive IDs

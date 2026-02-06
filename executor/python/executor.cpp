@@ -1,4 +1,5 @@
 
+#include <mignificient/ipc/config.hpp>
 #include <mignificient/executor/executor.hpp>
 
 #if defined(WITH_PYTHON)
@@ -16,8 +17,12 @@ void define_mignificient_runtime(py::module& m)
   // FIXME: function
   m.attr("__name__") = "_mignificient.function";
 
+  py::enum_<mignificient::ipc::IPCBackend>(m, "IPCBackend")
+    .value("ICEORYX_V1", mignificient::ipc::IPCBackend::ICEORYX_V1)
+    .value("ICEORYX_V2", mignificient::ipc::IPCBackend::ICEORYX_V2);
+
   py::class_<mignificient::executor::Runtime>(m, "Runtime")
-      .def(py::init<const std::string&>())
+      .def(py::init<mignificient::ipc::IPCBackend, const std::string&>())
       .def("loop_wait", &mignificient::executor::Runtime::loop_wait)
       .def("gpu_yield", &mignificient::executor::Runtime::gpu_yield)
       .def("register_runtime", &mignificient::executor::Runtime::register_runtime)

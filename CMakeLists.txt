@@ -70,12 +70,31 @@ else()
   message(STATUS "Found drogon dependency")
 endif()
 
+###
+# iceoryx2 (conditional)
+###
+if(BUILD_ICEORYX2)
+  message(STATUS "Building with iceoryx2 support")
+
+  # Add compile definition for all targets
+  add_compile_definitions(MIGNIFICIENT_WITH_ICEORYX2)
+
+  find_package(iceoryx2-cxx REQUIRED)
+
+  message(STATUS "iceoryx2 include directory: ${ICEORYX2_INCLUDE_DIR}")
+  message(STATUS "iceoryx2 library directory: ${ICEORYX2_LIB_DIR}")
+else()
+  message(STATUS "Building with iceoryx1 only (BUILD_ICEORYX2=OFF)")
+endif()
+
 add_subdirectory(${CMAKE_SOURCE_DIR}/external/flatbuffers
                  ${EXTERNAL_INSTALL_LOCATION}/flatbuffers-build
                  EXCLUDE_FROM_ALL)
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/external/iceoryx/iceoryx_meta
                  ${EXTERNAL_INSTALL_LOCATION}/iceoryx-build)
+
+add_subdirectory(common)
 
 add_subdirectory(gpuless)
 
