@@ -10,7 +10,7 @@ import mignificient
 if __name__ == "__main__":
 
     function_file = os.environ["FUNCTION_FILE"]
-    function_name = os.environ["FUNCTION_NAME"]
+    function_name = os.environ["FUNCTION_HANDLER"]
     container_name = os.environ["CONTAINER_NAME"]
 
     ipc_backend = os.environ["IPC_BACKEND"]

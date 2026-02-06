@@ -74,6 +74,7 @@ namespace mignificient { namespace orchestrator {
 
       _input_payload = input_data["input-payload"].asString();
       _function_name = input_data["function"].asString();
+      _function_handler = input_data["function-handler"].asString();
       _container = input_data["container"].asString();
       _function_path = input_data["function-path"].asString();
       _user = input_data["user"].asString();
@@ -130,6 +131,11 @@ namespace mignificient { namespace orchestrator {
     const std::string& function_name() const
     {
       return _function_name;
+    }
+
+    const std::string& function_handler() const
+    {
+      return _function_handler;
     }
 
     const std::string& function_path() const
@@ -189,6 +195,7 @@ namespace mignificient { namespace orchestrator {
     std::optional<std::string> _ld_preload;
     std::string _input_payload;
     std::string _function_name;
+    std::string _function_handler;
     std::string _function_path;
     std::string _container;
     std::string _user;

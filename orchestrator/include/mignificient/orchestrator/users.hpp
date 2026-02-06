@@ -150,6 +150,7 @@ namespace mignificient { namespace orchestrator {
     {
       // Create a new client with configured buffer sizes
       std::string client_id = unique_client_name(username, fname);
+      const std::string& fhandler = invocation->function_handler();
 
       ipc::BufferConfig executor_buf;
       ipc::BufferConfig gpuless_buf;
@@ -192,7 +193,7 @@ namespace mignificient { namespace orchestrator {
       if(invocation->language() == Language::CPP) {
 
         auto exec = std::make_unique<BareMetalExecutorCpp>(
-          _ipc_config, client_id, fname, invocation->function_path(),
+          _ipc_config, client_id, fname, fhandler, invocation->function_path(),
           invocation->gpu_memory(), *selected_gpu, _config["bare-metal-executor"],
           invocation->ld_preload()
         );
@@ -202,7 +203,7 @@ namespace mignificient { namespace orchestrator {
       } else {
 
         auto exec = std::make_unique<BareMetalExecutorPython>(
-          _ipc_config, client_id, fname, invocation->function_path(),
+          _ipc_config, client_id, fname, fhandler, invocation->function_path(),
           invocation->cuda_binary(), invocation->cubin_analysis(),
           invocation->gpu_memory(), *selected_gpu,
           _config["bare-metal-executor"],

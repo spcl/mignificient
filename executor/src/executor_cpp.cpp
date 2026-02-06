@@ -14,7 +14,7 @@ typedef int (*fptr)(mignificient::Invocation);
 fptr load_function()
 {
   std::string function_file{std::getenv("FUNCTION_FILE")};
-  std::string function_name{std::getenv("FUNCTION_NAME")};
+  std::string function_name{std::getenv("FUNCTION_HANDLER")};
 
   void *handle = dlopen(function_file.c_str(), RTLD_NOW);
   if (handle == nullptr)
