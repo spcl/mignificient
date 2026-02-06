@@ -1,0 +1,64 @@
+[global]
+root-path = "/tmp/iceoryx2/"
+prefix = "iox2_"
+
+[global.service]
+directory = "services"
+data-segment-suffix = ".data"
+static-config-storage-suffix = ".service"
+dynamic-config-storage-suffix = ".dynamic"
+connection-suffix = ".connection"
+event-connection-suffix = ".event"
+blackboard-mgmt-suffix = ".blackboard_mgmt"
+blackboard-data-suffix = ".blackboard_data"
+
+[global.service.creation-timeout]
+secs = 0
+nanos = 500000000
+
+[global.node]
+directory = "nodes"
+monitor-suffix = ".node_monitor"
+static-config-suffix = ".details"
+service-tag-suffix = ".service_tag"
+cleanup-dead-nodes-on-creation = true
+cleanup-dead-nodes-on-destruction = true
+
+[defaults.publish-subscribe]
+max-subscribers = 8
+max-publishers = 2
+max-nodes = 20
+subscriber-max-buffer-size = 20
+subscriber-max-borrowed-samples = 2
+publisher-max-loaned-samples = 2
+publisher-history-size = 0
+enable-safe-overflow = false
+unable-to-deliver-strategy = "Block"
+subscriber-expired-connection-buffer = 128
+
+[defaults.event]
+max-listeners = 16
+max-notifiers = 16
+max-nodes = 36
+event-id-max-value = 1024
+
+[defaults.request-response]
+enable-safe-overflow-for-requests = true
+enable-safe-overflow-for-responses = true
+max-active-requests-per-client = 4
+max-response-buffer-size = 2
+max-servers = 2
+max-clients = 8
+max-nodes = 20
+max-borrowed-responses-per-pending-response = 2
+max-loaned-requests = 2
+server-max-loaned-responses-per-request = 2
+client-unable-to-deliver-strategy = "Block"
+server-unable-to-deliver-strategy = "Block"
+client-expired-connection-buffer = 128
+enable-fire-and-forget-requests = true
+server-expired-connection-buffer = 128
+
+[defaults.blackboard]
+max-readers = 8
+max-nodes = 20
