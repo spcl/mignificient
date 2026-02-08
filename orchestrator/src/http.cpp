@@ -17,6 +17,48 @@ namespace mignificient { namespace orchestrator {
     }
   }
 
+  void HTTPServer::containers(const drogon::HttpRequestPtr& req,
+              std::function<void(const drogon::HttpResponsePtr&)>&& callback)
+  {
+    AdminRequest admin_req;
+    admin_req.type = AdminRequestType::LIST_CONTAINERS;
+    admin_req.respond = [callback](Json::Value result) {
+      auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+      callback(resp);
+    };
+
+    _trigger.trigger_admin(std::move(admin_req));
+  }
+
+  void HTTPServer::kill_container(const drogon::HttpRequestPtr& req,
+              std::function<void(const drogon::HttpResponsePtr&)>&& callback)
+  {
+    auto body = req->getJsonObject();
+    if (!body || !body->isMember("container") || !body->isMember("user")) {
+      Json::Value error;
+      error["success"] = false;
+      error["error"] = "Missing 'user' or 'container' field in request body";
+      auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+      resp->setStatusCode(drogon::k400BadRequest);
+      callback(resp);
+      return;
+    }
+
+    AdminRequest admin_req;
+    admin_req.type = AdminRequestType::KILL_CONTAINER;
+    admin_req.user = (*body)["user"].asString();
+    admin_req.container = (*body)["container"].asString();
+    admin_req.respond = [callback](Json::Value result) {
+      auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+      if (!result["success"].asBool()) {
+        resp->setStatusCode(drogon::k404NotFound);
+      }
+      callback(resp);
+    };
+
+    _trigger.trigger_admin(std::move(admin_req));
+  }
+
   HTTPServer::HTTPServer(Json::Value & config, HTTPTrigger& trigger):
     _trigger(trigger)
   {
