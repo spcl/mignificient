@@ -107,4 +107,40 @@ namespace mignificient { namespace orchestrator {
     _status = ClientStatus::NOT_ACTIVE;
   }
 
+  void Client::timeout_kill()
+  {
+    _status = ClientStatus::NOT_ACTIVE;
+
+    // Kill gpuless server and executor processes
+    kill(_gpuless_server.pid(), SIGKILL);
+    kill(_executor->pid(), SIGKILL);
+    waitpid(_gpuless_server.pid(), nullptr, 0);
+    waitpid(_executor->pid(), nullptr, 0);
+
+    // Respond with timeout error to active invocation
+    if (_active_invocation) {
+      _active_invocation->respond_timeout();
+      auto tmp = std::move(_active_invocation);
+      _active_invocation = nullptr;
+      gpu_instance()->finish_current_invocation(tmp.get());
+    }
+
+    // Respond with timeout error to finished invocation waiting for HTTP reply
+    if (_finished_invocation) {
+      _finished_invocation->respond_timeout();
+      _finished_invocation = nullptr;
+    }
+
+    // Drain pending invocations with timeout error
+    // TODO: in future, we might want to allocate a new container for them
+    while (!_pending_invocations.empty()) {
+      auto inv = std::move(_pending_invocations.front());
+      _pending_invocations.pop();
+      inv->respond_timeout();
+    }
+
+    // Unregister executor from GPU instance
+    gpu_instance()->close_executor(_executor->pid());
+  }
+
 }}

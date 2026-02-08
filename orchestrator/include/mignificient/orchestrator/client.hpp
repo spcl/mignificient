@@ -3,6 +3,8 @@
 
 #include <optional>
 #include <queue>
+#include <csignal>
+#include <sys/wait.h>
 
 #include <iceoryx_posh/popo/subscriber.hpp>
 #include <iceoryx_posh/popo/publisher.hpp>
@@ -283,6 +285,17 @@ namespace mignificient { namespace orchestrator {
       return _active;
     }
 
+    std::string status_string() const
+    {
+      switch (_status) {
+        case ClientStatus::NOT_ACTIVE: return "NOT_ACTIVE";
+        case ClientStatus::CPU_ONLY: return "CPU_ONLY";
+        case ClientStatus::MEMCPY: return "MEMCPY";
+        case ClientStatus::FULL: return "FULL";
+        default: return "UNKNOWN";
+      }
+    }
+
     GPUInstance* gpu_instance() const
     {
       assert(_gpu_instance);
@@ -334,6 +347,7 @@ namespace mignificient { namespace orchestrator {
 
       _active_invocation = std::move(_pending_invocations.front());
       _pending_invocations.pop();
+      _active_invocation->mark_started();
 
       strncpy(request().id, std::to_string(_invoc_idx++).c_str(), executor::Invocation::ID_LEN);
       std::copy_n(_active_invocation->input().begin(), _active_invocation->input().size(), request().data);
@@ -397,6 +411,18 @@ namespace mignificient { namespace orchestrator {
 
       _active = _gpuless_active && _executor_active;
       return _active;
+    }
+
+    bool check_timeout() const
+    {
+      return _active_invocation && _active_invocation->is_timed_out();
+    }
+
+    void timeout_kill();
+
+    ActiveInvocation* active_invocation() const
+    {
+      return _active_invocation.get();
     }
 
   private:
