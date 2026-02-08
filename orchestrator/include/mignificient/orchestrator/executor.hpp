@@ -29,7 +29,8 @@ namespace mignificient { namespace orchestrator {
     SWAP_IN = 5,
 
     REGISTER = 10,
-    SWAP_OFF_CONFIRM = 11
+    SWAP_OFF_CONFIRM = 11,
+    SWAP_IN_CONFIRM = 12
   };
 
   class GPUlessServer {
