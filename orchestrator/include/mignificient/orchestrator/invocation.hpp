@@ -112,6 +112,7 @@ namespace mignificient { namespace orchestrator {
       resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
 
       resp->setBody(reason);
+      resp->setBody(fmt::format("{{\"result\": null, \"error\": \"{}\"}}", reason));
 
       _http_callback(resp);
     }
