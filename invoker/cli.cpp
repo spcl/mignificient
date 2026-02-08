@@ -85,7 +85,14 @@ void independent(const std::string& address, int iterations, int parallel_reques
                 spdlog::error("Status {} Code {} Body {}", drogon::to_string_view(result), response->getStatusCode(), response->body());
               }
             } else {
-              SPDLOG_DEBUG("Finished invocation. Result {} Body {}", drogon::to_string_view(result), response->body());
+              auto it = response->headers().find("x-mignificient-swap-in-time");
+              if(it != response->headers().end()) {
+                auto time = (*it).second;
+                auto bytes = response->headers().at("x-mignificient-swap-in-memory");
+                spdlog::info("Finished invocation with swap-in (time = {} us, size = {} bytes). Result {} Body {}", time, bytes, drogon::to_string_view(result), response->body());
+              } else {
+                spdlog::info("Finished invocation. Result {} Body {}", drogon::to_string_view(result), response->body());
+              }
             }
 
           }
@@ -124,7 +131,14 @@ void independent(const std::string& address, int iterations, int parallel_reques
               spdlog::error("Status {} Code {} Body {}", drogon::to_string_view(result), response->getStatusCode(), response->body());
             }
           } else {
-            spdlog::info("Finished invocation. Result {} Body {}", drogon::to_string_view(result), response->body());
+            auto it = response->headers().find("x-mignificient-swap-in-time");
+            if(it != response->headers().end()) {
+              auto time = (*it).second;
+              auto bytes = response->headers().at("x-mignificient-swap-in-memory");
+              spdlog::info("Finished invocation with swap-in (time = {} us, size = {} bytes). Result {} Body {}", time, bytes, drogon::to_string_view(result), response->body());
+            } else {
+              spdlog::info("Finished invocation. Result {} Body {}", drogon::to_string_view(result), response->body());
+            }
           }
 
         }
