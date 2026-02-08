@@ -37,6 +37,7 @@ namespace mignificient { namespace orchestrator {
 
       /**
        * (A) Idle container on idle GPU -> schedule on it.
+       * (A') Lukewarm container -> swap-in first, then execute.
        *
        * Busy containers on idle GPUs or idle containers on busy GPUs?
        * (B) Then we add a new client IF there is an idle GPU.
@@ -52,6 +53,7 @@ namespace mignificient { namespace orchestrator {
       auto it = _gpu_clients.find(username);
       size_t min_pending = std::numeric_limits<size_t>::max();
       bool fully_idle = false;
+      Client* lukewarm_client = nullptr;
 
       if (it != _gpu_clients.end()) {
         for (auto& client : it->second) {
@@ -59,12 +61,15 @@ namespace mignificient { namespace orchestrator {
 
             selected_gpu = client->gpu_instance();
 
-            if (!client->is_busy() && !selected_gpu->is_busy()) {
+            if (!client->is_busy() && !client->is_lukewarm() && !selected_gpu->is_busy()) {
               // Variant (A) - we have an idle container on idle GPU
               spdlog::info("Using an existing client {} for user {}", client->id(), username);
               selected_client = client.get();
               fully_idle = true;
               break;
+            } else if (client->is_lukewarm() && !lukewarm_client) {
+              // Variant (A') - lukewarm container found
+              lukewarm_client = client.get();
             } else {
 
               if (selected_gpu->pending_invocations() < min_pending) {
@@ -77,6 +82,25 @@ namespace mignificient { namespace orchestrator {
           }
         }
         ++it;
+      }
+
+      // Variant (A') - prefer lukewarm over allocating new cold container
+      if(!selected_client && !fully_idle && lukewarm_client) {
+        spdlog::info("Using lukewarm client {} for user {}, triggering swap-in", lukewarm_client->id(), username);
+        selected_client = lukewarm_client;
+        selected_gpu = lukewarm_client->gpu_instance();
+
+        auto* invoc_ptr = invocation.get();
+        // Store the invocation for later
+        selected_client->add_invocation(std::move(invocation));
+        // GPU needs to also know the invocation to know the uuid later
+        selected_gpu->add_pending_invocation(selected_client, invoc_ptr);
+
+        // Trigger swap-in; when SWAP_IN_CONFIRM arrives, scheduling will continue
+        selected_client->set_swap_in_for_invocation(true);
+        selected_client->swap_in();
+
+        return std::make_tuple(nullptr, true);
       }
 
       // Variant A - jump forward to the end.
