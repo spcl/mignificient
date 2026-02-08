@@ -77,6 +77,17 @@ namespace mignificient { namespace orchestrator {
 
       gpuless_listener = gpuless_event_listen->listener_builder().create().value();
       gpuless_notifier = gpuless_event_notify->notifier_builder().create().value();
+
+      {
+        auto swap_result_service = node.service_builder(
+            iox2::ServiceName::create(fmt::format("{}.Orchestrator.Gpuless.SwapResult", id).c_str()).value())
+        .publish_subscribe<mignificient::executor::SwapResult>()
+        .max_publishers(1)
+        .max_subscribers(1)
+        .open_or_create().value();
+
+        gpuless_swap_recv = std::move(swap_result_service.subscriber_builder().create().value());
+      }
     }
 
   }

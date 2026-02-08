@@ -151,11 +151,19 @@ namespace mignificient { namespace executor {
       .publish_subscribe<mignificient::executor::InvocationResult>()
       .max_publishers(1)
       .max_subscribers(1)
-      .open_or_create().value();
+      .open_or_create();
 
-      auto pub_result = exec_send_service.publisher_builder().create();
+      if (!exec_send_service.has_value()) {
+        spdlog::error("Failed to create iceoryx2 service for orchestrator-client recv: {}", static_cast<uint64_t>(exec_send_service.error()));
+        throw std::runtime_error("Failed to create iceoryx2 service");
+      }
+
+      auto pub_result = exec_send_service.value().publisher_builder().create();
       if (pub_result.has_value()) {
         client_send = std::move(pub_result.value());
+      } else {
+        spdlog::error("Failed to create iceoryx2 publisher for orchestrator-client recv: {}", static_cast<uint64_t>(pub_result.error()));
+        throw std::runtime_error("Failed to create iceoryx2 publisher");
       }
 
       auto exec_pub_service = iox2_node->service_builder(
@@ -163,11 +171,19 @@ namespace mignificient { namespace executor {
       .publish_subscribe<mignificient::executor::Invocation>()
       .max_publishers(1)
       .max_subscribers(1)
-      .open_or_create().value();
+      .open_or_create();
 
-      auto sub_result = exec_pub_service.subscriber_builder().create();
+      if (!exec_pub_service.has_value()) {
+        spdlog::error("Failed to create iceoryx2 service for orchestrator-client send: {}", static_cast<uint64_t>(exec_pub_service.error()));
+        throw std::runtime_error("Failed to create iceoryx2 service");
+      }
+
+      auto sub_result = exec_pub_service.value().subscriber_builder().create();
       if (sub_result.has_value()) {
         orchestrator_recv = std::move(sub_result.value());
+      } else {
+        spdlog::error("Failed to create iceoryx2 subscriber for orchestrator-client send: {}", static_cast<uint64_t>(sub_result.error()));
+        throw std::runtime_error("Failed to create iceoryx2 subscriber");
       }
 
       {
@@ -176,6 +192,9 @@ namespace mignificient { namespace executor {
         .event().open_or_create();
         if (exec_event_service.has_value()) {
           client_event_listen = std::move(exec_event_service.value());
+        } else {
+          spdlog::error("Failed to create iceoryx2 service for orchestrator-client notifier: {}", static_cast<uint64_t>(exec_event_service.error()));
+          throw std::runtime_error("Failed to create iceoryx2 service");
         }
       }
       {
@@ -184,8 +203,10 @@ namespace mignificient { namespace executor {
         .event().open_or_create();
         if (exec_event_service.has_value()) {
           client_event_notify = std::move(exec_event_service.value());
+        } else {
+          spdlog::error("Failed to create iceoryx2 service for orchestrator-client listener: {}", static_cast<uint64_t>(exec_event_service.error()));
+          throw std::runtime_error("Failed to create iceoryx2 service");
         }
-        std::cerr << "Client notifier: " << fmt::format("{}.Orchestrator.Client.Listen", name) << std::endl;
       }
 
       auto res = iox2::WaitSetBuilder()
@@ -197,9 +218,33 @@ namespace mignificient { namespace executor {
       }
       waitset = std::move(res.value());
 
-      orchestrator_listener = client_event_listen->listener_builder().create().value();
-      client_notifier = client_event_notify->notifier_builder().create().value();
-      _yield_msg = client_send.value().loan_uninit().value();
+      {
+        auto _orchestrator_listener = client_event_listen->listener_builder().create();
+        if(!_orchestrator_listener.has_value()) {
+          spdlog::error("Failed to create iceoryx2 client listener: {}", static_cast<uint64_t>(_orchestrator_listener.error()));
+          throw std::runtime_error("Failed to create iceoryx2 listener");
+        }
+
+        orchestrator_listener = std::move(_orchestrator_listener.value());
+      }
+      {
+        auto _client_notifier = client_event_notify->notifier_builder().create();
+        if(!_client_notifier.has_value()) {
+          spdlog::error("Failed to create iceoryx2 client notifier: {}", static_cast<uint64_t>(_client_notifier.error()));
+          throw std::runtime_error("Failed to create iceoryx2 notifier");
+        }
+
+        client_notifier = std::move(_client_notifier.value());
+      }
+      {
+        auto yield_msg = client_send.value().loan_uninit();
+        if(!yield_msg.has_value()) {
+          spdlog::error("Failed to create iceoryx2 client yield msg sample: {}", static_cast<uint64_t>(yield_msg.error()));
+          throw std::runtime_error("Failed to create iceoryx2 sample");
+        }
+
+        _yield_msg = std::move(yield_msg.value());
+      }
     }
 
   }

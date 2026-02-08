@@ -57,6 +57,11 @@ namespace mignificient { namespace orchestrator {
       return _sharing_model;
     }
 
+    void add_pending_invocation(Client* client, ActiveInvocation* invocation)
+    {
+      _pending_invocations.emplace(invocation, client);
+    }
+
     void add_invocation(Client* client, ActiveInvocation* invocation)
     {
       if(is_busy() || !client->is_active()) {
@@ -69,7 +74,7 @@ namespace mignificient { namespace orchestrator {
       } else {
 
         _current_invocation = std::make_tuple(invocation, client);
-        //spdlog::info("[GPUInstance {}] Start a new active invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
+        SPDLOG_DEBUG("[GPUInstance {}] Start a new active invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
         client->send_request();
         client->activate_kernels();
       }
@@ -199,6 +204,18 @@ namespace mignificient { namespace orchestrator {
       SPDLOG_DEBUG("Closing down executor PID {}, freeing up {} MB", pid, memory);
       _executors.erase(pid);
       _used_memory -= memory;
+    }
+
+    void release_memory(float amount)
+    {
+      _used_memory -= amount;
+      SPDLOG_DEBUG("[GPUInstance {}] Releasing {} MB of GPU memory (swap-off), used currently: {}", _uuid, amount, _used_memory);
+    }
+
+    void reclaim_memory(float amount)
+    {
+      _used_memory += amount;
+      SPDLOG_DEBUG("[GPUInstance {}] Reclaiming {} MB of GPU memory (swap-in), used currently: {}", _uuid, amount, _used_memory);
     }
 
     bool has_enough_memory(float alloc) const

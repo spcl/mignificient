@@ -1,6 +1,7 @@
 #ifndef __MIGNIFICIENT_ORCHESTRATOR_CLIENT_HPP__
 #define __MIGNIFICIENT_ORCHESTRATOR_CLIENT_HPP__
 
+#include <functional>
 #include <optional>
 #include <queue>
 #include <csignal>
@@ -39,6 +40,7 @@ namespace mignificient { namespace orchestrator {
     iox::popo::Subscriber<mignificient::executor::InvocationResult> _recv;
     iox::popo::Publisher<int> _gpuless_send;
     iox::popo::Subscriber<int> _gpuless_recv;
+    iox::popo::Subscriber<executor::SwapResult> _gpuless_swap_recv;
     iox::popo::Sample<int, iox::mepoo::NoUserHeader> _gpuless_payload;
     iox::popo::Sample<mignificient::executor::Invocation, iox::mepoo::NoUserHeader> _payload;
 
@@ -71,6 +73,13 @@ namespace mignificient { namespace orchestrator {
           "Send"
         }
       ),
+      _gpuless_swap_recv(
+        iox::capro::ServiceDescription{
+          iox::RuntimeName_t{iox::TruncateToCapacity_t{}, fmt::format("gpuless-{}", id).c_str()},
+          "Orchestrator",
+          "SwapResult"
+        }
+      ),
       _payload(
         _send.loan().value()
       ),
@@ -97,6 +106,8 @@ namespace mignificient { namespace orchestrator {
     std::optional<iox2::Notifier<iox2::ServiceType::Ipc>> gpuless_notifier;
     std::optional<iox2::Listener<iox2::ServiceType::Ipc>> gpuless_listener;
     std::optional<iox2::WaitSetGuard<iox2::ServiceType::Ipc>> gpuless_listener_guard;
+
+    std::optional<iox2::Subscriber<iox2::ServiceType::Ipc, mignificient::executor::SwapResult, void>> gpuless_swap_recv;
 
     std::optional<iox2::SampleMutUninit<iox2::ServiceType::Ipc, mignificient::executor::Invocation, void>> client_payload;
 
@@ -162,6 +173,24 @@ namespace mignificient { namespace orchestrator {
     iox::popo::Subscriber<int>& gpuless_subscriber()
     {
       return _comm_v1.value()._gpuless_recv;
+    }
+
+    std::optional<executor::SwapResult> read_swap_result()
+    {
+      if (_ipc_backend == ipc::IPCBackend::ICEORYX_V1) {
+        auto val = _comm_v1.value()._gpuless_swap_recv.take();
+        if (!val.has_error()) {
+          return *val->get();
+        }
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+      } else if (_ipc_backend == ipc::IPCBackend::ICEORYX_V2) {
+        auto val = _comm_v2->gpuless_swap_recv->receive();
+        if (val.has_value() && val.value().has_value()) {
+          return val.value()->payload();
+        }
+#endif
+      }
+      return std::nullopt;
     }
 
 #ifdef MIGNIFICIENT_WITH_ICEORYX2
@@ -275,6 +304,60 @@ namespace mignificient { namespace orchestrator {
       return _busy;
     }
 
+    bool is_lukewarm() const
+    {
+      return _lukewarm;
+    }
+
+    void set_lukewarm(bool val)
+    {
+      _lukewarm = val;
+    }
+
+    void swap_off()
+    {
+      SPDLOG_DEBUG("[Client] Sending SWAP_OFF to gpuless for {}", _id);
+      send_gpuless_msg(GPUlessMessage::SWAP_OFF);
+    }
+
+    void swap_in()
+    {
+      SPDLOG_DEBUG("[Client] Sending SWAP_IN to gpuless for {}", _id);
+      send_gpuless_msg(GPUlessMessage::SWAP_IN);
+    }
+
+    void set_pending_swap_callback(std::function<void(const executor::SwapResult&)> callback)
+    {
+      _pending_swap_callback = std::move(callback);
+    }
+
+    std::function<void(const executor::SwapResult&)> take_pending_swap_callback()
+    {
+      auto cb = std::move(_pending_swap_callback);
+      _pending_swap_callback = nullptr;
+      return cb;
+    }
+
+    bool has_pending_swap_callback() const
+    {
+      return _pending_swap_callback != nullptr;
+    }
+
+    void set_swap_in_for_invocation(bool val)
+    {
+      _swap_in_for_invocation = val;
+    }
+
+    bool is_swap_in_for_invocation() const
+    {
+      return _swap_in_for_invocation;
+    }
+
+    Executor* executor_ptr() const
+    {
+      return _executor.get();
+    }
+
     ClientStatus status() const
     {
       return _status;
@@ -317,6 +400,13 @@ namespace mignificient { namespace orchestrator {
     {
       SPDLOG_DEBUG("[Client] For client {} add a new invocation {}", _id, invoc->uuid());
       _pending_invocations.push(std::move(invoc));
+    }
+
+    ActiveInvocation* front_pending_invocation()
+    {
+      if(_pending_invocations.empty())
+        return nullptr;
+      return _pending_invocations.front().get();
     }
 
     void finished(std::string_view response);
@@ -430,9 +520,14 @@ namespace mignificient { namespace orchestrator {
 
     int _invoc_idx = 0;
     bool _busy = false;
+    bool _lukewarm = false;
+    bool _swap_in_for_invocation = false;
     bool _executor_active = false;
     bool _gpuless_active = false;
     std::atomic<bool> _active = false;
+
+    //executor::SwapResult _last_swap_in_stats{};
+    std::function<void(const executor::SwapResult&)> _pending_swap_callback;
 
     std::string _id;
     std::string _fname;

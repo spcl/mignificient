@@ -22,6 +22,14 @@
 
 namespace mignificient { namespace executor {
 
+  struct SwapResult {
+    static constexpr const char* IOX2_TYPE_NAME = "SwapResult";
+
+    double time_us;
+    size_t memory_bytes;
+    int status;
+  };
+
   struct Invocation {
     // FIXME: replace with static array
     static constexpr int CAPACITY = 1 * 1024 * 1024;

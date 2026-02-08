@@ -36,7 +36,7 @@ void define_mignificient_runtime(py::module& m)
       .def(
           "view_readable",
           [](mignificient::InvocationData& self) {
-            return py::memoryview::from_memory(self.data, sizeof(std::byte) * mignificient::executor::Invocation::CAPACITY);
+            return py::memoryview::from_memory(self.data, sizeof(std::byte) * self.size);
           }
       );
 

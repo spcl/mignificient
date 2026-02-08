@@ -59,6 +59,64 @@ namespace mignificient { namespace orchestrator {
     _trigger.trigger_admin(std::move(admin_req));
   }
 
+  void HTTPServer::swap_off(const drogon::HttpRequestPtr& req,
+              std::function<void(const drogon::HttpResponsePtr&)>&& callback)
+  {
+    auto body = req->getJsonObject();
+    if (!body || !body->isMember("container") || !body->isMember("user")) {
+      Json::Value error;
+      error["success"] = false;
+      error["error"] = "Missing 'user' or 'container' field in request body";
+      auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+      resp->setStatusCode(drogon::k400BadRequest);
+      callback(resp);
+      return;
+    }
+
+    AdminRequest admin_req;
+    admin_req.type = AdminRequestType::SWAP_OFF;
+    admin_req.user = (*body)["user"].asString();
+    admin_req.container = (*body)["container"].asString();
+    admin_req.respond = [callback](Json::Value result) {
+      auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+      if (!result["success"].asBool()) {
+        resp->setStatusCode(result.isMember("not_found") ? drogon::k404NotFound : drogon::k400BadRequest);
+      }
+      callback(resp);
+    };
+
+    _trigger.trigger_admin(std::move(admin_req));
+  }
+
+  void HTTPServer::swap_in(const drogon::HttpRequestPtr& req,
+              std::function<void(const drogon::HttpResponsePtr&)>&& callback)
+  {
+    auto body = req->getJsonObject();
+    if (!body || !body->isMember("container") || !body->isMember("user")) {
+      Json::Value error;
+      error["success"] = false;
+      error["error"] = "Missing 'user' or 'container' field in request body";
+      auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+      resp->setStatusCode(drogon::k400BadRequest);
+      callback(resp);
+      return;
+    }
+
+    AdminRequest admin_req;
+    admin_req.type = AdminRequestType::SWAP_IN;
+    admin_req.user = (*body)["user"].asString();
+    admin_req.container = (*body)["container"].asString();
+    admin_req.respond = [callback](Json::Value result) {
+      auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+      if (!result["success"].asBool()) {
+        resp->setStatusCode(result.isMember("not_found") ? drogon::k404NotFound : drogon::k400BadRequest);
+      }
+      callback(resp);
+    };
+
+    _trigger.trigger_admin(std::move(admin_req));
+  }
+
   HTTPServer::HTTPServer(Json::Value & config, HTTPTrigger& trigger):
     _trigger(trigger)
   {

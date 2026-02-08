@@ -2,12 +2,15 @@
 #define __MIGNIFICIENT_ORCHESTRATOR_INVOCATION_HPP__
 
 #include <chrono>
+#include <optional>
 #include <stdexcept>
 #include <string>
 
 #include <drogon/HttpResponse.h>
 #include <drogon/HttpTypes.h>
 #include <spdlog/spdlog.h>
+
+#include <mignificient/executor/executor.hpp>
 
 namespace mignificient { namespace orchestrator {
 
@@ -114,6 +117,11 @@ namespace mignificient { namespace orchestrator {
       _http_callback(resp);
     }
 
+    void set_swap_in_stats(const executor::SwapResult& stats)
+    {
+      _swap_in_stats = stats;
+    }
+
     void respond(std::string_view response)
     {
       auto end = std::chrono::high_resolution_clock::now();
@@ -122,10 +130,13 @@ namespace mignificient { namespace orchestrator {
       resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
 
       // Zero-copy operation
-      //resp->setViewBody(response.begin(), response.size());
-      resp->setBody(fmt::format("{{\"result\": \"{}\"}}", response));
-      // This one works with default implementation
-      //resp->setBody(std::string{response.begin(), response.size()});
+      resp->setViewBody(response.begin(), response.size());
+
+      // Add swap-in stats headers if this invocation required a swap-in
+      if(_swap_in_stats.has_value()) {
+        resp->addHeader("X-MIGnificient-Swap-In-Time", std::to_string(_swap_in_stats->time_us));
+        resp->addHeader("X-MIGnificient-Swap-In-Memory", std::to_string(_swap_in_stats->memory_bytes));
+      }
 
       auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - _begin).count();
       SPDLOG_DEBUG("[Invoc] Responding to the HTTP request for invocation {} from user {} after {} ms", _uuid, _user, duration / 1000.0);
@@ -218,6 +229,7 @@ namespace mignificient { namespace orchestrator {
   private:
     std::function<void(const drogon::HttpResponsePtr&)> _http_callback;
 
+    std::optional<executor::SwapResult> _swap_in_stats;
     decltype(std::chrono::high_resolution_clock::now()) _begin;
     Language _function_language;
     std::string _cuda_binary;
