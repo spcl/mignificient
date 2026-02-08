@@ -23,6 +23,8 @@
 namespace mignificient { namespace executor {
 
   struct SwapResult {
+    static constexpr const char* IOX2_TYPE_NAME = "SwapResult";
+
     double time_us;
     size_t memory_bytes;
     int status;
