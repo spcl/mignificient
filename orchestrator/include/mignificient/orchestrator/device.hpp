@@ -279,6 +279,8 @@ namespace mignificient { namespace orchestrator {
 
         }
 
+        ++it;
+
       }
 
       return nullptr;
