@@ -21,7 +21,7 @@
 
 namespace mignificient { namespace orchestrator {
 
-  enum class AdminRequestType { LIST_CONTAINERS, KILL_CONTAINER };
+  enum class AdminRequestType { LIST_CONTAINERS, KILL_CONTAINER, SWAP_OFF, SWAP_IN };
 
   struct AdminRequest {
     AdminRequestType type;
@@ -192,11 +192,15 @@ namespace mignificient { namespace orchestrator {
       ADD_METHOD_TO(HTTPServer::invoke, "/invoke", drogon::Post);
       ADD_METHOD_TO(HTTPServer::containers, "/containers", drogon::Get);
       ADD_METHOD_TO(HTTPServer::kill_container, "/kill", drogon::Post);
+      ADD_METHOD_TO(HTTPServer::swap_off, "/swap-off", drogon::Post);
+      ADD_METHOD_TO(HTTPServer::swap_in, "/swap-in", drogon::Post);
       METHOD_LIST_END
 
       void invoke(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback);
       void containers(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback);
       void kill_container(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+      void swap_off(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+      void swap_in(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback);
 
       HTTPServer(Json::Value & config, HTTPTrigger& trigger);
       void run();
