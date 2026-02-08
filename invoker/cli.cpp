@@ -82,7 +82,7 @@ void independent(const std::string& address, int iterations, int parallel_reques
               spdlog::error("Failed invocation! Result {}");
 
               if(response) {
-                spdlog::error("Status {} Body {}", drogon::to_string_view(result), response->getStatusCode(), response->body());
+                spdlog::error("Status {} Code {} Body {}", drogon::to_string_view(result), response->getStatusCode(), response->body());
               }
             } else {
               SPDLOG_DEBUG("Finished invocation. Result {} Body {}", drogon::to_string_view(result), response->body());
@@ -121,7 +121,7 @@ void independent(const std::string& address, int iterations, int parallel_reques
             spdlog::error("Failed invocation! Result {}");
 
             if(response) {
-              spdlog::error("Status {} Body {}", drogon::to_string_view(result), response->getStatusCode(), response->body());
+              spdlog::error("Status {} Code {} Body {}", drogon::to_string_view(result), response->getStatusCode(), response->body());
             }
           } else {
             spdlog::info("Finished invocation. Result {} Body {}", drogon::to_string_view(result), response->body());

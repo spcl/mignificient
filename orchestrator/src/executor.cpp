@@ -104,7 +104,7 @@ namespace mignificient { namespace orchestrator {
     char* argv[] = {const_cast<char*>(_cpp_executor.c_str()), NULL};
 
     std::string poll_type = fmt::format("POLL_TYPE={}", poll_sleep ? "wait" : "poll");
-    std::string fname = fmt::format("FUNCTION_NAME={}", _function);
+    std::string fname = fmt::format("FUNCTION_HANDLER={}", _function_handler);
     std::string cbinary = fmt::format("CUDA_BINARY={}", _function_path);
     std::string ffile = fmt::format("FUNCTION_FILE={}", _function_path);
 
@@ -180,7 +180,7 @@ namespace mignificient { namespace orchestrator {
     };
 
     std::string poll_type = fmt::format("POLL_TYPE={}", poll_sleep ? "wait" : "poll");
-    std::string fname = fmt::format("FUNCTION_NAME={}", _function);
+    std::string fname = fmt::format("FUNCTION_HANDLER={}", _function_handler);
     std::string cbinary = fmt::format("CUDA_BINARY={}", _cuda_binary);
     std::string ffile = fmt::format("FUNCTION_FILE={}", _function_path);
     std::string pythonpath = fmt::format("PYTHONPATH={}", _python_path);

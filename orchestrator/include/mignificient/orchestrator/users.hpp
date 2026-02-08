@@ -61,7 +61,7 @@ namespace mignificient { namespace orchestrator {
 
             if (!client->is_busy() && !selected_gpu->is_busy()) {
               // Variant (A) - we have an idle container on idle GPU
-              spdlog::error("Using an existing client {} for user {}", client->id(), username);
+              spdlog::info("Using an existing client {} for user {}", client->id(), username);
               selected_client = client.get();
               fully_idle = true;
               break;
@@ -144,12 +144,74 @@ namespace mignificient { namespace orchestrator {
       }
     }
 
+    Client* find_client(const std::string& user, const std::string& id)
+    {
+      auto it = _gpu_clients.find(user);
+      if (it == _gpu_clients.end())
+        return nullptr;
+      for (auto& client : it->second) {
+        if (client->id() == id)
+          return client.get();
+      }
+      return nullptr;
+    }
+
+    void remove_client(const std::string& user, Client* target)
+    {
+      auto it = _gpu_clients.find(user);
+      if (it == _gpu_clients.end())
+        return;
+
+      auto& clients = it->second;
+      for (auto cit = clients.begin(); cit != clients.end(); ++cit) {
+        if (cit->get() == target) {
+          clients.erase(cit);
+          return;
+        }
+      }
+    }
+
+    template<typename F>
+    Json::Value list_containers(F status_fn)
+    {
+      Json::Value result(Json::objectValue);
+      for (auto& [username, clients] : _gpu_clients) {
+        Json::Value user_containers(Json::arrayValue);
+        for (auto& client : clients) {
+          Json::Value entry;
+          entry["id"] = client->id();
+          entry["function"] = client->fname();
+          entry["status"] = client->status_string();
+          entry["allocated"] = client->is_active();
+          user_containers.append(entry);
+        }
+        result[username] = user_containers;
+      }
+      return result;
+    }
+
+    template<typename F>
+    void check_timeouts(F on_timeout)
+    {
+      for (auto& [username, clients] : _gpu_clients) {
+        for (auto it = clients.begin(); it != clients.end(); ) {
+          if ((*it)->check_timeout()) {
+            on_timeout(it->get());
+            it = clients.erase(it);
+          } else {
+            ++it;
+          }
+        }
+      }
+    }
+
   private:
 
     Client* allocate(const std::string& username, const std::string& fname, ActiveInvocation* invocation, GPUInstance* selected_gpu)
     {
       // Create a new client with configured buffer sizes
       std::string client_id = unique_client_name(username, fname);
+      const std::string& fhandler = invocation->function_handler();
 
       ipc::BufferConfig executor_buf;
       ipc::BufferConfig gpuless_buf;
@@ -192,7 +254,7 @@ namespace mignificient { namespace orchestrator {
       if(invocation->language() == Language::CPP) {
 
         auto exec = std::make_unique<BareMetalExecutorCpp>(
-          _ipc_config, client_id, fname, invocation->function_path(),
+          _ipc_config, client_id, fname, fhandler, invocation->function_path(),
           invocation->gpu_memory(), *selected_gpu, _config["bare-metal-executor"],
           invocation->ld_preload()
         );
@@ -202,7 +264,7 @@ namespace mignificient { namespace orchestrator {
       } else {
 
         auto exec = std::make_unique<BareMetalExecutorPython>(
-          _ipc_config, client_id, fname, invocation->function_path(),
+          _ipc_config, client_id, fname, fhandler, invocation->function_path(),
           invocation->cuda_binary(), invocation->cubin_analysis(),
           invocation->gpu_memory(), *selected_gpu,
           _config["bare-metal-executor"],

@@ -163,6 +163,11 @@ namespace mignificient { namespace orchestrator {
 
       }
     }
+
+    auto admin_reqs = this_ptr->_http_trigger_v1->get_admin_requests();
+    for (auto& req : admin_reqs) {
+      this_ptr->_handle_admin_request(std::move(req));
+    }
   }
 
   void Orchestrator::init(const Json::Value& config)
@@ -204,6 +209,9 @@ namespace mignificient { namespace orchestrator {
     _gpu_manager(device_db_path, sharing_model(config["sharing-model"].asString())),
     _users(_gpu_manager, config["executor"], _ipc_config)
   {
+    if (config.isMember("timeout-check-interval-ms")) {
+      _timeout_check_interval_ms = config["timeout-check-interval-ms"].asInt();
+    }
 
     auto http_config = config["http"];
 
@@ -297,12 +305,14 @@ namespace mignificient { namespace orchestrator {
   {
     while(!_quit)
     {
-      auto notificationVector = _waitset->wait();
+      auto notificationVector = _waitset->timedWait(iox::units::Duration::fromMilliseconds(_timeout_check_interval_ms));
 
       for (auto& notification : notificationVector)
       {
         (*notification)();
       }
+
+      _check_timeouts();
     }
   }
 
@@ -310,8 +320,23 @@ namespace mignificient { namespace orchestrator {
 
   void Orchestrator::_event_loop_v2()
   {
+    auto interval_guard = _waitset_v2->attach_interval(
+        iox2::bb::Duration::from_millis(_timeout_check_interval_ms));
+    if (!interval_guard.has_value()) {
+      spdlog::error("Failed to attach timeout interval to waitset");
+      return;
+    }
+    _timeout_interval_guard = std::move(interval_guard.value());
+    auto timeout_check_id = iox2::WaitSetAttachmentId<iox2::ServiceType::Ipc>::from_guard(
+        *_timeout_interval_guard);
+
     auto res = _waitset_v2->wait_and_process(
       [&](iox2::WaitSetAttachmentId<iox2::ServiceType::Ipc> attachment_id) {
+
+        if (attachment_id == timeout_check_id) {
+          _check_timeouts();
+          return iox2::CallbackProgression::Continue;
+        }
 
         if (_http_trigger_v2->triggered(attachment_id)) {
           _handle_http_v2();
@@ -349,6 +374,7 @@ namespace mignificient { namespace orchestrator {
     spdlog::info("Finished iceoryx2 event loop with status {}", res.value());
 
     // We need to deallocate listeners before we destroy the waitset
+    _timeout_interval_guard.reset();
     _http_trigger_v2->unregister_trigger();
     _users.apply_clients(
 [](Client *client){
@@ -378,8 +404,79 @@ namespace mignificient { namespace orchestrator {
         _waitset_mappings_v2.insert(std::make_pair(std::move(res[1]), std::make_tuple(client, false)));
       }
     }
+
+    auto admin_reqs = _http_trigger_v2->get_admin_requests();
+    for (auto& req : admin_reqs) {
+      _handle_admin_request(std::move(req));
+    }
   }
 
 #endif // MIGNIFICIENT_WITH_ICEORYX2
+
+  void Orchestrator::_handle_admin_request(AdminRequest&& req)
+  {
+    Json::Value result;
+
+    if (req.type == AdminRequestType::LIST_CONTAINERS) {
+
+      result = _users.list_containers([](Client* c) { return c->status_string(); });
+
+    } else if (req.type == AdminRequestType::KILL_CONTAINER) {
+
+      Client* client = _users.find_client(req.user, req.container);
+      if (!client) {
+        result["success"] = false;
+        result["error"] = "Container not found: " + req.container + " for user: " + req.user;
+      } else {
+        spdlog::info("Admin kill request for client {}", client->id());
+
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+        if (_ipc_config.backend == ipc::IPCBackend::ICEORYX_V2) {
+          // If we don't remove the mappings, iceoryx2 will complain later.
+          client->uninit_v2();
+          for (auto it = _waitset_mappings_v2.begin(); it != _waitset_mappings_v2.end(); ) {
+            if (std::get<0>(it->second) == client) {
+              it = _waitset_mappings_v2.erase(it);
+            } else {
+              ++it;
+            }
+          }
+        }
+#endif
+
+        client->timeout_kill();
+        _gpu_manager.return_gpu(client->gpu_instance());
+        _users.remove_client(req.user, client);
+        result["success"] = true;
+      }
+    }
+
+    req.respond(result);
+  }
+
+  void Orchestrator::_check_timeouts()
+  {
+    _users.check_timeouts([this](Client* client) {
+      spdlog::error("Timeout for client {}", client->id());
+
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+      if (_ipc_config.backend == ipc::IPCBackend::ICEORYX_V2) {
+        // Remove waitset mappings for this client before killing
+        client->uninit_v2();
+        // Erase entries from the mapping by finding those pointing to this client
+        for (auto it = _waitset_mappings_v2.begin(); it != _waitset_mappings_v2.end(); ) {
+          if (std::get<0>(it->second) == client) {
+            it = _waitset_mappings_v2.erase(it);
+          } else {
+            ++it;
+          }
+        }
+      }
+#endif
+
+      client->timeout_kill();
+      _gpu_manager.return_gpu(client->gpu_instance());
+    });
+  }
 
 }}

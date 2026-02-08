@@ -37,6 +37,8 @@ namespace mignificient { namespace orchestrator {
 
     bool start(const ipc::IPCConfig& ipc_config, const std::string& user_id, GPUInstance& instance, bool poll_sleep, bool use_vmm, const Json::Value& config, int cpu_idx = -1);
 
+    pid_t pid() const { return _pid; }
+
   private:
     pid_t _pid;
   };
@@ -97,13 +99,14 @@ namespace mignificient { namespace orchestrator {
 
   class Executor {
   public:
-      Executor(const ipc::IPCConfig& ipc_config, const std::string& user, const std::string& function, float gpu_memory, GPUInstance& device, const std::optional<std::string>& ld_preload):
+      Executor(const ipc::IPCConfig& ipc_config, const std::string& user, const std::string& function, const std::string& function_handler, float gpu_memory, GPUInstance& device, const std::optional<std::string>& ld_preload):
         _ipc_config(ipc_config),
         _user(user),
         _gpu_memory(gpu_memory),
         _ld_preload(ld_preload),
         _pid(0),
         _function(function),
+        _function_handler(function_handler),
         _device(device)
       {}
 
@@ -140,6 +143,7 @@ namespace mignificient { namespace orchestrator {
       float _gpu_memory;
       pid_t _pid;
       std::string _function;
+      std::string _function_handler;
       GPUInstance& _device;
   };
 
@@ -149,11 +153,11 @@ namespace mignificient { namespace orchestrator {
 
     BareMetalExecutorCpp(
       const ipc::IPCConfig& ipc_config, const std::string& user_id, const std::string& function,
-      const std::string& function_path,
+      const std::string& function_handler, const std::string& function_path,
       float gpu_memory, GPUInstance& device, const Json::Value& config,
       std::optional<std::string> ld_preload
     ):
-      Executor(ipc_config, user_id, function, gpu_memory, device, ld_preload),
+      Executor(ipc_config, user_id, function, function_handler, gpu_memory, device, ld_preload),
       _function_path(function_path),
       _cpp_executor(config["cpp"].asString()),
       _gpuless_lib(config["gpuless-lib"].asString())
@@ -175,6 +179,7 @@ namespace mignificient { namespace orchestrator {
         const ipc::IPCConfig& ipc_config,
         const std::string& user_id,
         const std::string& function,
+        const std::string& function_handler,
         const std::string& function_path,
         const std::string& cuda_binary,
         const std::string& cubin_analysis,
@@ -183,7 +188,7 @@ namespace mignificient { namespace orchestrator {
         const Json::Value& config,
         std::optional<std::string> ld_preload
     ):
-      Executor(ipc_config, user_id, function, gpu_memory, device, ld_preload),
+      Executor(ipc_config, user_id, function, function_handler, gpu_memory, device, ld_preload),
       _function_path(function_path),
       _cuda_binary(cuda_binary),
       _cubin_analysis(cubin_analysis),
@@ -212,12 +217,13 @@ namespace mignificient { namespace orchestrator {
         const ipc::IPCConfig& ipc_config,
         const std::string& user_id,
         const std::string& function,
+        const std::string& function_handler,
         const std::string& function_path,
         float gpu_memory, GPUInstance& device,
         const Json::Value& config,
         const std::optional<std::string>& ld_preload
     ):
-      Executor(ipc_config, user_id, function, gpu_memory, device, ld_preload),
+      Executor(ipc_config, user_id, function, function_handler, gpu_memory, device, ld_preload),
       _function_path(function_path),
       _cpp_executor(config["cpp"].asString()),
       _gpuless_lib(config["gpuless-lib"].asString())

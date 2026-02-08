@@ -1,6 +1,7 @@
 #ifndef __MIGNIFICIENT_ORCHESTRATOR_INVOCATION_HPP__
 #define __MIGNIFICIENT_ORCHESTRATOR_INVOCATION_HPP__
 
+#include <chrono>
 #include <stdexcept>
 #include <string>
 
@@ -36,7 +37,7 @@ namespace mignificient { namespace orchestrator {
         return nullptr;
       }
 
-      for(const auto& field : {"function", "user", "uuid", "modules", "mig-instance", "gpu-memory"}) {
+      for(const auto& field : {"function", "user", "uuid", "modules", "mig-instance", "gpu-memory", "timeout"}) {
         if (!input_data.isMember(field)) {
 
           auto resp = drogon::HttpResponse::newHttpResponse();
@@ -74,6 +75,7 @@ namespace mignificient { namespace orchestrator {
 
       _input_payload = input_data["input-payload"].asString();
       _function_name = input_data["function"].asString();
+      _function_handler = input_data["function-handler"].asString();
       _container = input_data["container"].asString();
       _function_path = input_data["function-path"].asString();
       _user = input_data["user"].asString();
@@ -97,6 +99,7 @@ namespace mignificient { namespace orchestrator {
       _mig_instance = input_data["mig-instance"].asString();
       _gpu_memory = input_data["gpu-memory"].asInt();
 
+      _timeout_us = static_cast<int64_t>(input_data["timeout"].asDouble() * 1e6);
     }
 
     void failure(const std::string& reason)
@@ -130,6 +133,11 @@ namespace mignificient { namespace orchestrator {
     const std::string& function_name() const
     {
       return _function_name;
+    }
+
+    const std::string& function_handler() const
+    {
+      return _function_handler;
     }
 
     const std::string& function_path() const
@@ -178,6 +186,33 @@ namespace mignificient { namespace orchestrator {
       return _gpu_memory;
     }
 
+    void mark_started()
+    {
+      _dispatch_time = std::chrono::high_resolution_clock::now();
+    }
+
+    bool is_timed_out() const
+    {
+      auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::high_resolution_clock::now() - _dispatch_time
+      ).count();
+      return elapsed > _timeout_us;
+    }
+
+    int64_t timeout_seconds() const
+    {
+      return _timeout_us / 1000000;
+    }
+
+    void respond_timeout()
+    {
+      auto resp = drogon::HttpResponse::newHttpResponse();
+      resp->setStatusCode(drogon::k200OK);
+      resp->setContentTypeCode(drogon::CT_APPLICATION_JSON);
+      resp->setBody(fmt::format("{{\"result\": null, \"error\": \"timeout after {} seconds\"}}", timeout_seconds()));
+      _http_callback(resp);
+    }
+
   private:
     std::function<void(const drogon::HttpResponsePtr&)> _http_callback;
 
@@ -189,12 +224,15 @@ namespace mignificient { namespace orchestrator {
     std::optional<std::string> _ld_preload;
     std::string _input_payload;
     std::string _function_name;
+    std::string _function_handler;
     std::string _function_path;
     std::string _container;
     std::string _user;
     std::string _mig_instance;
     std::string _uuid;
     float _gpu_memory;
+    int64_t _timeout_us = 0;
+    decltype(std::chrono::high_resolution_clock::now()) _dispatch_time;
     std::array<std::string, 5> _modules;
   };
 
