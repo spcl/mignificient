@@ -37,6 +37,8 @@ namespace mignificient { namespace orchestrator {
 
     bool start(const ipc::IPCConfig& ipc_config, const std::string& user_id, GPUInstance& instance, bool poll_sleep, bool use_vmm, const Json::Value& config, int cpu_idx = -1);
 
+    pid_t pid() const { return _pid; }
+
   private:
     pid_t _pid;
   };

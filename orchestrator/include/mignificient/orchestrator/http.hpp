@@ -21,6 +21,15 @@
 
 namespace mignificient { namespace orchestrator {
 
+  enum class AdminRequestType { LIST_CONTAINERS, KILL_CONTAINER };
+
+  struct AdminRequest {
+    AdminRequestType type;
+    std::string user;
+    std::string container;
+    std::function<void(Json::Value)> respond;
+  };
+
   struct HTTPTrigger {
 
     HTTPTrigger(ipc::IPCBackend backend):
@@ -57,6 +66,31 @@ namespace mignificient { namespace orchestrator {
       return invocations;
     }
 
+    void trigger_admin(AdminRequest&& req)
+    {
+      {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _admin_requests.push(std::move(req));
+      }
+      internal_trigger();
+    }
+
+    std::vector<AdminRequest> get_admin_requests()
+    {
+      std::vector<AdminRequest> requests;
+
+      {
+        std::lock_guard<std::mutex> lock{_mutex};
+
+        while(!_admin_requests.empty()) {
+          requests.push_back(std::move(_admin_requests.front()));
+          _admin_requests.pop();
+        }
+      }
+
+      return requests;
+    }
+
   private:
     ipc::IPCBackend _ipc_backend;
 
@@ -65,6 +99,7 @@ namespace mignificient { namespace orchestrator {
     // TODO: Lock-free queue?
     std::mutex _mutex;
     std::queue<std::unique_ptr<ActiveInvocation>> _invocations;
+    std::queue<AdminRequest> _admin_requests;
   };
 
   struct HTTPTriggerV1 : public HTTPTrigger {
@@ -152,11 +187,16 @@ namespace mignificient { namespace orchestrator {
        * - Modules to load
        * - MIG size
        * - GPU mem allocation
+       * - Timeout
        */
       ADD_METHOD_TO(HTTPServer::invoke, "/invoke", drogon::Post);
+      ADD_METHOD_TO(HTTPServer::containers, "/containers", drogon::Get);
+      ADD_METHOD_TO(HTTPServer::kill_container, "/kill", drogon::Post);
       METHOD_LIST_END
 
       void invoke(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+      void containers(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+      void kill_container(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback);
 
       HTTPServer(Json::Value & config, HTTPTrigger& trigger);
       void run();
