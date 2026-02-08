@@ -1,6 +1,7 @@
 {
   "name": "mignificient-orchestrator",
   "sharing-model": "sequential",
+  "timeout-check-interval-ms": 100,
   "ipc": {
     "backend": "iceoryx2",
     "buffer-config": {

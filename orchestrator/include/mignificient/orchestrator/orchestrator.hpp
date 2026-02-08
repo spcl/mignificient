@@ -51,6 +51,10 @@ namespace mignificient { namespace orchestrator {
 
     int _client_id = 0;
     int _invoc_id = 0;
+    int _timeout_check_interval_ms = 100;
+
+    void _check_timeouts();
+    void _handle_admin_request(AdminRequest&& req);
 
     std::unordered_map<int, Client> clients;
 
@@ -92,6 +96,8 @@ namespace mignificient { namespace orchestrator {
       iox2::WaitSetAttachmentId<iox2::ServiceType::Ipc>,
       std::tuple<Client*, bool>
     > _waitset_mappings_v2;
+
+    std::optional<iox2::WaitSetGuard<iox2::ServiceType::Ipc>> _timeout_interval_guard;
 
     void _event_loop_v2();
     void _handle_http_v2();
