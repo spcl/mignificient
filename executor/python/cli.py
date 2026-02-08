@@ -45,5 +45,5 @@ if __name__ == "__main__":
 
         size = func(mignificient.Invocation(runtime, invocation_data, runtime.result()))
 
-        runtime.finish(10)
+        runtime.finish(size)
 
