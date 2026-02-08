@@ -109,6 +109,7 @@ namespace mignificient { namespace orchestrator {
       resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
 
       resp->setBody(reason);
+      resp->setBody(fmt::format("{{\"result\": null, \"error\": \"{}\"}}", reason));
 
       _http_callback(resp);
     }
@@ -121,7 +122,8 @@ namespace mignificient { namespace orchestrator {
       resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
 
       // Zero-copy operation
-      resp->setViewBody(response.begin(), response.size());
+      //resp->setViewBody(response.begin(), response.size());
+      resp->setBody(fmt::format("{{\"result\": \"{}\"}}", response));
       // This one works with default implementation
       //resp->setBody(std::string{response.begin(), response.size()});
 
