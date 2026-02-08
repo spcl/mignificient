@@ -33,23 +33,77 @@ namespace mignificient { namespace orchestrator {
   std::optional<iox2::Node<iox2::ServiceType::Ipc>> Orchestrator::_iox2_node;
 #endif
 
+  static void _handle_swap_confirm(int msg, Client* client)
+  {
+    auto swap_data = client->read_swap_result();
+    executor::SwapResult result{};
+    if(swap_data.has_value()) {
+      result = swap_data.value();
+    } else {
+      spdlog::warn("No SwapResult data received from gpuless for client {}", client->id());
+      result.status = -1;
+    }
+
+    if(msg == static_cast<int>(GPUlessMessage::SWAP_OFF_CONFIRM)) {
+
+      spdlog::info("Received SWAP_OFF_CONFIRM from gpuless server {}: {} bytes in {} us",
+        client->id(), result.memory_bytes, result.time_us);
+      client->set_lukewarm(true);
+
+      if(client->executor_ptr()) {
+        auto mb = static_cast<double>(result.memory_bytes) / 1024.0 / 1024.0;
+        client->gpu_instance()->release_memory(mb);
+      }
+
+      if(client->has_pending_swap_callback()) {
+        auto cb = client->take_pending_swap_callback();
+        cb(result);
+      }
+
+    } else if(msg == static_cast<int>(GPUlessMessage::SWAP_IN_CONFIRM)) {
+
+      spdlog::info("Received SWAP_IN_CONFIRM from gpuless server {}: {} bytes in {} us",
+        client->id(), result.memory_bytes, result.time_us);
+      client->set_lukewarm(false);
+
+      if(client->executor_ptr()) {
+        auto mb = static_cast<double>(result.memory_bytes) / 1024.0 / 1024.0;
+        client->gpu_instance()->reclaim_memory(mb);
+      }
+
+      if(client->has_pending_swap_callback()) {
+        auto cb = client->take_pending_swap_callback();
+        cb(result);
+      } else if(client->is_swap_in_for_invocation()) {
+
+        // We finished the swap in, and now we just record statistics.
+        client->set_swap_in_for_invocation(false);
+        client->front_pending_invocation()->set_swap_in_stats(result);
+
+        client->gpu_instance()->schedule_next();
+
+      }
+    }
+  }
+
   // iceoryx1 callback: handle gpuless subscriber messages
   void handle_gpuless(iox::popo::Subscriber<int>* sub, Client* client)
   {
     while(client->gpuless_subscriber().hasData()) {
 
       auto res = client->gpuless_subscriber().take();
+      int msg = *res.value().get();
 
-      if(*res.value().get() == static_cast<int>(GPUlessMessage::REGISTER)) {
+      if(msg == static_cast<int>(GPUlessMessage::REGISTER)) {
         spdlog::info("Received registration from gpuless server {}", client->id());
         if(client->gpuless_active()) {
           client->gpu_instance()->schedule_next();
         }
-      } else if(*res.value().get() == static_cast<int>(GPUlessMessage::SWAP_OFF_CONFIRM)) {
-        // FIXME: implement
-        throw std::runtime_error("unimplemented");
+      } else if(msg == static_cast<int>(GPUlessMessage::SWAP_OFF_CONFIRM) ||
+                msg == static_cast<int>(GPUlessMessage::SWAP_IN_CONFIRM)) {
+        _handle_swap_confirm(msg, client);
       } else {
-        spdlog::error("Received unknown message from gpuless server, code: {}", *res.value().get());
+        spdlog::error("Received unknown message from gpuless server, code: {}", msg);
       }
 
     }
@@ -88,9 +142,9 @@ namespace mignificient { namespace orchestrator {
       if(client->gpuless_active()) {
         client->gpu_instance()->schedule_next();
       }
-    } else if(msg == static_cast<int>(GPUlessMessage::SWAP_OFF_CONFIRM)) {
-      // FIXME: implement
-      throw std::runtime_error("unimplemented");
+    } else if(msg == static_cast<int>(GPUlessMessage::SWAP_OFF_CONFIRM) ||
+              msg == static_cast<int>(GPUlessMessage::SWAP_IN_CONFIRM)) {
+      _handle_swap_confirm(msg, client);
     } else {
       spdlog::error("Received unknown message from gpuless server, code: {}", msg);
     }
@@ -448,6 +502,65 @@ namespace mignificient { namespace orchestrator {
         _gpu_manager.return_gpu(client->gpu_instance());
         _users.remove_client(req.user, client);
         result["success"] = true;
+      }
+
+    } else if (req.type == AdminRequestType::SWAP_OFF) {
+
+      Client* client = _users.find_client(req.user, req.container);
+      if (!client) {
+        result["success"] = false;
+        result["not_found"] = true;
+        result["error"] = fmt::format("No container found: {} for user: {}", req.container, req.user);
+      } else if (client->is_lukewarm()) {
+        result["success"] = false;
+        result["error"] = "Container is already swapped off";
+      } else if (client->is_busy()) {
+        result["success"] = false;
+        result["error"] = "Container is busy, cannot swap off";
+      } else {
+        spdlog::info("Swap-off request for client {}", client->id());
+
+        auto respond_fn = std::move(req.respond);
+        client->set_pending_swap_callback(
+          [respond_fn](const executor::SwapResult& swap_result) {
+            Json::Value r;
+            r["success"] = true;
+            r["time_us"] = swap_result.time_us;
+            r["memory_bytes"] = static_cast<Json::UInt64>(swap_result.memory_bytes);
+            r["status"] = swap_result.status;
+            respond_fn(r);
+          }
+        );
+        client->swap_off();
+        return;  // Response will be sent when SWAP_OFF_CONFIRM arrives
+      }
+
+    } else if (req.type == AdminRequestType::SWAP_IN) {
+
+      Client* client = _users.find_client(req.user, req.container);
+      if (!client) {
+        result["success"] = false;
+        result["not_found"] = true;
+        result["error"] = fmt::format("No container found: {} for user: {}", req.container, req.user);
+      } else if (!client->is_lukewarm()) {
+        result["success"] = false;
+        result["error"] = "Container is not swapped off";
+      } else {
+        spdlog::info("Swap-in request for client {}", client->id());
+
+        auto respond_fn = std::move(req.respond);
+        client->set_pending_swap_callback(
+          [respond_fn](const executor::SwapResult& swap_result) {
+            Json::Value r;
+            r["success"] = true;
+            r["time_us"] = swap_result.time_us;
+            r["memory_bytes"] = static_cast<Json::UInt64>(swap_result.memory_bytes);
+            r["status"] = swap_result.status;
+            respond_fn(r);
+          }
+        );
+        client->swap_in();
+        return;  // Response will be sent when SWAP_IN_CONFIRM arrives
       }
     }
 
