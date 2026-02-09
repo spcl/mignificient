@@ -509,6 +509,10 @@ namespace mignificient { namespace orchestrator {
     }
 
     void timeout_kill();
+    void oom_kill();
+
+    void set_oom_detected(bool val) { _oom_detected = val; }
+    bool is_oom_detected() const { return _oom_detected; }
 
     ActiveInvocation* active_invocation() const
     {
@@ -524,6 +528,7 @@ namespace mignificient { namespace orchestrator {
     bool _swap_in_for_invocation = false;
     bool _executor_active = false;
     bool _gpuless_active = false;
+    bool _oom_detected = false;
     std::atomic<bool> _active = false;
 
     //executor::SwapResult _last_swap_in_stats{};

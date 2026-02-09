@@ -226,6 +226,15 @@ namespace mignificient { namespace orchestrator {
       _http_callback(resp);
     }
 
+    void respond_oom()
+    {
+      auto resp = drogon::HttpResponse::newHttpResponse();
+      resp->setStatusCode(drogon::k200OK);
+      resp->setContentTypeCode(drogon::CT_APPLICATION_JSON);
+      resp->setBody("{\"result\": null, \"error\": \"out of GPU memory\"}");
+      _http_callback(resp);
+    }
+
   private:
     std::function<void(const drogon::HttpResponsePtr&)> _http_callback;
 

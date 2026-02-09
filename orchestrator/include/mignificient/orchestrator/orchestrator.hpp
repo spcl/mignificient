@@ -54,6 +54,7 @@ namespace mignificient { namespace orchestrator {
     int _timeout_check_interval_ms = 100;
 
     void _check_timeouts();
+    void _check_oom();
     void _handle_admin_request(AdminRequest&& req);
 
     std::unordered_map<int, Client> clients;

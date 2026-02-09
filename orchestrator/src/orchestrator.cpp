@@ -102,6 +102,10 @@ namespace mignificient { namespace orchestrator {
       } else if(msg == static_cast<int>(GPUlessMessage::SWAP_OFF_CONFIRM) ||
                 msg == static_cast<int>(GPUlessMessage::SWAP_IN_CONFIRM)) {
         _handle_swap_confirm(msg, client);
+      } else if(msg == static_cast<int>(GPUlessMessage::OUT_OF_MEMORY)) {
+        spdlog::error("OOM detected by gpuless server for client {}", client->id());
+        // Mark for OOM handling - actual cleanup done in event loop via _check_oom()
+        client->set_oom_detected(true);
       } else {
         spdlog::error("Received unknown message from gpuless server, code: {}", msg);
       }
@@ -118,6 +122,7 @@ namespace mignificient { namespace orchestrator {
 
       if(res.value().get()->msg == executor::Message::FINISH) {
 
+        client->send_gpuless_msg(GPUlessMessage::INVOCATION_FINISH);
         client->finished(std::string_view{reinterpret_cast<const char*>(res.value().get()->data), res.value().get()->size});
 
       } else if (res.value().get()->msg == executor::Message::YIELD) {
@@ -145,6 +150,9 @@ namespace mignificient { namespace orchestrator {
     } else if(msg == static_cast<int>(GPUlessMessage::SWAP_OFF_CONFIRM) ||
               msg == static_cast<int>(GPUlessMessage::SWAP_IN_CONFIRM)) {
       _handle_swap_confirm(msg, client);
+    } else if(msg == static_cast<int>(GPUlessMessage::OUT_OF_MEMORY)) {
+      spdlog::error("OOM detected by gpuless server for client {}", client->id());
+      client->set_oom_detected(true);
     } else {
       spdlog::error("Received unknown message from gpuless server, code: {}", msg);
     }
@@ -166,6 +174,7 @@ namespace mignificient { namespace orchestrator {
 
     if(payload.msg == executor::Message::FINISH) {
 
+      client->send_gpuless_msg(GPUlessMessage::INVOCATION_FINISH);
       client->finished(std::string_view{reinterpret_cast<const char*>(payload.data), payload.size});
 
     } else if (res.value()->payload().msg == executor::Message::YIELD) {
@@ -367,6 +376,7 @@ namespace mignificient { namespace orchestrator {
       }
 
       _check_timeouts();
+      _check_oom();
     }
   }
 
@@ -389,6 +399,7 @@ namespace mignificient { namespace orchestrator {
 
         if (attachment_id == timeout_check_id) {
           _check_timeouts();
+          _check_oom();
           return iox2::CallbackProgression::Continue;
         }
 
@@ -588,6 +599,29 @@ namespace mignificient { namespace orchestrator {
 #endif
 
       client->timeout_kill();
+      _gpu_manager.return_gpu(client->gpu_instance());
+    });
+  }
+
+  void Orchestrator::_check_oom()
+  {
+    _users.check_oom([this](Client* client) {
+      spdlog::error("OOM kill for client {}", client->id());
+
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+      if (_ipc_config.backend == ipc::IPCBackend::ICEORYX_V2) {
+        client->uninit_v2();
+        for (auto it = _waitset_mappings_v2.begin(); it != _waitset_mappings_v2.end(); ) {
+          if (std::get<0>(it->second) == client) {
+            it = _waitset_mappings_v2.erase(it);
+          } else {
+            ++it;
+          }
+        }
+      }
+#endif
+
+      client->oom_kill();
       _gpu_manager.return_gpu(client->gpu_instance());
     });
   }

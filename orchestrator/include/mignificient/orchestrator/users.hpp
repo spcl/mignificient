@@ -229,6 +229,21 @@ namespace mignificient { namespace orchestrator {
       }
     }
 
+    template<typename F>
+    void check_oom(F on_oom)
+    {
+      for (auto& [username, clients] : _gpu_clients) {
+        for (auto it = clients.begin(); it != clients.end(); ) {
+          if ((*it)->is_oom_detected()) {
+            on_oom(it->get());
+            it = clients.erase(it);
+          } else {
+            ++it;
+          }
+        }
+      }
+    }
+
   private:
 
     Client* allocate(const std::string& username, const std::string& fname, ActiveInvocation* invocation, GPUInstance* selected_gpu)
@@ -271,8 +286,11 @@ namespace mignificient { namespace orchestrator {
         _ipc_config, client_id, *selected_gpu,
         _config["poll-gpuless-sleep"].asBool(),
         _config["use-vmm"].asBool(),
-        _config["bare-metal-executor"], gpuless_cpu_idx
+        _config["bare-metal-executor"],
+        invocation->gpu_memory(),
+        gpuless_cpu_idx
       );
+
 
       std::unique_ptr<Executor> executor;
       if(invocation->language() == Language::CPP) {
