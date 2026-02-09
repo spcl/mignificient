@@ -4,6 +4,16 @@ project(mignificient)
 
 set(EXTERNAL_INSTALL_LOCATION ${CMAKE_BINARY_DIR}/external)
 
+option(WITH_PROFILING "Additional profiling output" OFF)
+if (${WITH_PROFILING})
+  add_compile_options(-DMIGNIFICIENT_WITH_PROFILING)
+endif()
+
+option(WITH_MEMORY_PROFILING "Enable memory profiling on every API call" OFF)
+if (${WITH_MEMORY_PROFILING})
+  add_compile_options(-DMIGNIFICIENT_WITH_MEMORY_PROFILING)
+endif()
+
 find_package(spdlog 1.8...<1.10 QUIET)
 if(NOT spdlog_FOUND)
   message(STATUS "Downloading and building spdlog dependency")
