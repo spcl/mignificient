@@ -118,6 +118,48 @@ namespace mignificient { namespace orchestrator {
     _status = ClientStatus::NOT_ACTIVE;
   }
 
+  void Client::oom_kill()
+  {
+    _status = ClientStatus::NOT_ACTIVE;
+
+    // Kill executor
+    kill(_executor->pid(), SIGKILL);
+
+    // Respond with OOM error to active invocation
+    if (_active_invocation) {
+      _active_invocation->respond_oom();
+      auto tmp = std::move(_active_invocation);
+      _active_invocation = nullptr;
+      gpu_instance()->finish_current_invocation(tmp.get());
+    }
+
+    // Respond with OOM error to finished invocation waiting for HTTP reply
+    if (_finished_invocation) {
+      _finished_invocation->respond_oom();
+      _finished_invocation = nullptr;
+    }
+
+    // Drain pending invocations with OOM error
+    while (!_pending_invocations.empty()) {
+      auto inv = std::move(_pending_invocations.front());
+      _pending_invocations.pop();
+      inv->respond_oom();
+    }
+
+    // Unregister executor from GPU instance
+    gpu_instance()->close_executor(_executor->pid());
+
+    // Gpuless should be exiting on its own; give it a moment, then force kill
+    int status;
+    pid_t result = waitpid(_gpuless_server.pid(), &status, WNOHANG);
+    if (result == 0) {
+      // Not yet exited, force kill
+      kill(_gpuless_server.pid(), SIGKILL);
+      waitpid(_gpuless_server.pid(), nullptr, 0);
+    }
+    waitpid(_executor->pid(), nullptr, 0);
+  }
+
   void Client::timeout_kill()
   {
     _status = ClientStatus::NOT_ACTIVE;

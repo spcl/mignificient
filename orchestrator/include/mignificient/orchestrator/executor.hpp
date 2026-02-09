@@ -30,13 +30,16 @@ namespace mignificient { namespace orchestrator {
 
     REGISTER = 10,
     SWAP_OFF_CONFIRM = 11,
-    SWAP_IN_CONFIRM = 12
+    SWAP_IN_CONFIRM = 12,
+
+    OUT_OF_MEMORY = 13,
+    INVOCATION_FINISH = 14
   };
 
   class GPUlessServer {
   public:
 
-    bool start(const ipc::IPCConfig& ipc_config, const std::string& user_id, GPUInstance& instance, bool poll_sleep, bool use_vmm, const Json::Value& config, int cpu_idx = -1);
+    bool start(const ipc::IPCConfig& ipc_config, const std::string& user_id, GPUInstance& instance, bool poll_sleep, bool use_vmm, const Json::Value& config, float max_memory, int cpu_idx = -1);
 
     pid_t pid() const { return _pid; }
 

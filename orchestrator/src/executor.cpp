@@ -12,7 +12,7 @@ namespace mignificient { namespace orchestrator {
   bool GPUlessServer::start(
     const ipc::IPCConfig& ipc_config, const std::string& user_id, GPUInstance& instance,
     bool poll_sleep, bool use_vmm,
-    const Json::Value& config, int cpu_idx
+    const Json::Value& config, float gpu_memory, int cpu_idx
   )
   {
     std::string gpuless_mgr = config["gpuless-exec"].asString();
@@ -32,9 +32,11 @@ namespace mignificient { namespace orchestrator {
 
     std::string cpu_idx_str = fmt::format("CPU_BIND_IDX={}", cpu_idx);
     std::string ipc_backend = fmt::format("IPC_BACKEND={}", ipc::IPCConfig::backend_string(ipc_config.backend));
+    std::string memory_limit = fmt::format("MIGNIFICIENT_MAX_GPU_MEMORY={}", std::to_string(gpu_memory));
 
     std::vector<char*> envs;
     envs.emplace_back(const_cast<char*>(ipc_backend.c_str()));
+    envs.emplace_back(const_cast<char*>(memory_limit.c_str()));
     if(cpu_idx != -1) {
       envs.emplace_back(const_cast<char*>(cpu_idx_str.c_str()));
     }
