@@ -1,6 +1,8 @@
 
 #include <mignificient/executor/executor.hpp>
 
+#include <dlfcn.h>
+
 #include <iox/signal_watcher.hpp>
 #include <iceoryx_hoofs/posix_wrapper/signal_handler.hpp>
 #include <iceoryx_posh/capro/service_description.hpp>
@@ -382,7 +384,7 @@ namespace mignificient { namespace executor {
       auto res = orchestrator_listener.value().blocking_wait_one();
       if(!res.has_value()) {
         spdlog::error("Failed to receive notification from orchestrator!");
-        abort();
+        return InvocationData{nullptr, 0};
       }
 
       if(!res.value().has_value()) {
@@ -421,6 +423,15 @@ namespace mignificient { namespace executor {
 #endif
     else {
       abort();
+    }
+
+    // Call into libgpuless.so's MemcpyCopyStats singleton via C-linkage symbol.
+    // The singleton lives in the LD_PRELOADed library, so dlsym(RTLD_DEFAULT)
+    // finds it at runtime without a link-time dependency.
+    using print_fn_t = void(*)();
+    static auto fn = reinterpret_cast<print_fn_t>(dlsym(RTLD_DEFAULT, "mignificient_memcpy_stats_print_and_reset"));
+    if (fn) {
+      fn();
     }
   }
 

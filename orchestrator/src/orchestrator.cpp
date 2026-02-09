@@ -95,7 +95,10 @@ namespace mignificient { namespace orchestrator {
       int msg = *res.value().get();
 
       if(msg == static_cast<int>(GPUlessMessage::REGISTER)) {
-        spdlog::info("Received registration from gpuless server {}", client->id());
+        auto now = std::chrono::high_resolution_clock::now();
+        double startup_us = std::chrono::duration<double, std::micro>(now - client->spawn_time()).count();
+        spdlog::info("[StartupStats] gpuless server {} registered in {:.1f} us ({:.3f} ms)",
+                     client->id(), startup_us, startup_us / 1000.0);
         if(client->gpuless_active()) {
           client->gpu_instance()->schedule_next();
         }
@@ -130,7 +133,10 @@ namespace mignificient { namespace orchestrator {
         client->yield();
 
       } else {
-        spdlog::info("Received registration from executor {}", client->id());
+        auto now = std::chrono::high_resolution_clock::now();
+        double startup_us = std::chrono::duration<double, std::micro>(now - client->spawn_time()).count();
+        spdlog::info("[StartupStats] executor {} registered in {:.1f} us ({:.3f} ms)",
+                     client->id(), startup_us, startup_us / 1000.0);
         if(client->executor_active()) {
           client->gpu_instance()->schedule_next();
         }
@@ -143,7 +149,10 @@ namespace mignificient { namespace orchestrator {
   {
 
     if(msg == static_cast<int>(GPUlessMessage::REGISTER)) {
-      spdlog::info("Received registration from gpuless server {}", client->id());
+      auto now = std::chrono::high_resolution_clock::now();
+      double startup_us = std::chrono::duration<double, std::micro>(now - client->spawn_time()).count();
+      spdlog::info("[StartupStats] gpuless server {} registered in {:.1f} us ({:.3f} ms)",
+                   client->id(), startup_us, startup_us / 1000.0);
       if(client->gpuless_active()) {
         client->gpu_instance()->schedule_next();
       }
@@ -182,7 +191,10 @@ namespace mignificient { namespace orchestrator {
       client->yield();
 
     } else {
-      spdlog::info("Received registration from executor {}", client->id());
+      auto now = std::chrono::high_resolution_clock::now();
+      double startup_us = std::chrono::duration<double, std::micro>(now - client->spawn_time()).count();
+      spdlog::info("[StartupStats] executor {} registered in {:.1f} us ({:.3f} ms)",
+                   client->id(), startup_us, startup_us / 1000.0);
       if(client->executor_active()) {
         client->gpu_instance()->schedule_next();
       }

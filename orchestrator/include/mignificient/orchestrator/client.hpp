@@ -1,6 +1,7 @@
 #ifndef __MIGNIFICIENT_ORCHESTRATOR_CLIENT_HPP__
 #define __MIGNIFICIENT_ORCHESTRATOR_CLIENT_HPP__
 
+#include <chrono>
 #include <functional>
 #include <optional>
 #include <queue>
@@ -514,6 +515,9 @@ namespace mignificient { namespace orchestrator {
     void set_oom_detected(bool val) { _oom_detected = val; }
     bool is_oom_detected() const { return _oom_detected; }
 
+    void set_spawn_time(std::chrono::high_resolution_clock::time_point t) { _spawn_time = t; }
+    std::chrono::high_resolution_clock::time_point spawn_time() const { return _spawn_time; }
+
     ActiveInvocation* active_invocation() const
     {
       return _active_invocation.get();
@@ -530,6 +534,7 @@ namespace mignificient { namespace orchestrator {
     bool _gpuless_active = false;
     bool _oom_detected = false;
     std::atomic<bool> _active = false;
+    std::chrono::high_resolution_clock::time_point _spawn_time;
 
     //executor::SwapResult _last_swap_in_stats{};
     std::function<void(const executor::SwapResult&)> _pending_swap_callback;

@@ -281,6 +281,8 @@ namespace mignificient { namespace orchestrator {
 
       }
 
+      auto spawn_time = std::chrono::high_resolution_clock::now();
+
       GPUlessServer gpuless_server;
       gpuless_server.start(
         _ipc_config, client_id, *selected_gpu,
@@ -318,6 +320,7 @@ namespace mignificient { namespace orchestrator {
 
       }
 
+      selected_client->set_spawn_time(spawn_time);
       selected_client->set_gpuless_server(std::move(gpuless_server), selected_gpu);
       selected_gpu->add_executor(executor.get());
       selected_client->set_executor(std::move(executor));

@@ -1,3 +1,5 @@
+#include <chrono>
+
 #include <mignificient/orchestrator/client.hpp>
 
 #include <mignificient/orchestrator/device.hpp>
@@ -120,10 +122,27 @@ namespace mignificient { namespace orchestrator {
 
   void Client::oom_kill()
   {
+    auto kill_start = std::chrono::high_resolution_clock::now();
+
     _status = ClientStatus::NOT_ACTIVE;
 
     // Kill executor
     kill(_executor->pid(), SIGKILL);
+
+    // Gpuless should be exiting on its own; give it a moment, then force kill
+    int status;
+    pid_t result = waitpid(_gpuless_server.pid(), &status, WNOHANG);
+    if (result == 0) {
+      // Not yet exited, force kill
+      kill(_gpuless_server.pid(), SIGKILL);
+      waitpid(_gpuless_server.pid(), nullptr, 0);
+    }
+    waitpid(_executor->pid(), nullptr, 0);
+
+    auto kill_end = std::chrono::high_resolution_clock::now();
+    double kill_time_us = std::chrono::duration<double, std::micro>(kill_end - kill_start).count();
+    spdlog::info("[KillStats] oom_kill for {}: {:.1f} us ({:.3f} ms)",
+                 _id, kill_time_us, kill_time_us / 1000.0);
 
     // Respond with OOM error to active invocation
     if (_active_invocation) {
@@ -148,20 +167,12 @@ namespace mignificient { namespace orchestrator {
 
     // Unregister executor from GPU instance
     gpu_instance()->close_executor(_executor->pid());
-
-    // Gpuless should be exiting on its own; give it a moment, then force kill
-    int status;
-    pid_t result = waitpid(_gpuless_server.pid(), &status, WNOHANG);
-    if (result == 0) {
-      // Not yet exited, force kill
-      kill(_gpuless_server.pid(), SIGKILL);
-      waitpid(_gpuless_server.pid(), nullptr, 0);
-    }
-    waitpid(_executor->pid(), nullptr, 0);
   }
 
   void Client::timeout_kill()
   {
+    auto kill_start = std::chrono::high_resolution_clock::now();
+
     _status = ClientStatus::NOT_ACTIVE;
 
     // Kill gpuless server and executor processes
@@ -169,6 +180,11 @@ namespace mignificient { namespace orchestrator {
     kill(_executor->pid(), SIGKILL);
     waitpid(_gpuless_server.pid(), nullptr, 0);
     waitpid(_executor->pid(), nullptr, 0);
+
+    auto kill_end = std::chrono::high_resolution_clock::now();
+    double kill_time_us = std::chrono::duration<double, std::micro>(kill_end - kill_start).count();
+    spdlog::info("[KillStats] timeout_kill for {}: {:.1f} us ({:.3f} ms)",
+                 _id, kill_time_us, kill_time_us / 1000.0);
 
     // Respond with timeout error to active invocation
     if (_active_invocation) {
