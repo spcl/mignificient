@@ -29,7 +29,7 @@ def device_db(build):
     return os.path.join(d, "devices.json")
 
 
-def start_orchestrator(args, tmp, port):
+def start_orchestrator(args, tmp, port, state):
     with open(os.path.join(args.build, "config", "orchestrator.json")) as f:
         cfg = json.load(f)
     cfg["http"]["port"] = port
@@ -43,6 +43,7 @@ def start_orchestrator(args, tmp, port):
     proc = subprocess.Popen([os.path.join(args.build, "orchestrator", "orchestrator"), cfg_path,
                              device_db(args.build)],
                             cwd=tmp, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+    state["proc"] = proc  # register at once so teardown/watchdog see it during startup
     t0 = time.time()
     while time.time() - t0 < 30:
         if proc.poll() is not None:
@@ -55,7 +56,7 @@ def start_orchestrator(args, tmp, port):
     raise Fail("orchestrator not ready after 30 s\n" + IOX_HINT)
 
 
-def request(port, case, block, user, payload_override=None):
+def request(port, case, block, user, payload=None):
     spec = case[block]
     # client key = user+function and the executor binds the symbol once, so each block is its own client
     body = {
@@ -64,7 +65,7 @@ def request(port, case, block, user, payload_override=None):
         "user": user, "uuid": f"it-{block}-{time.time_ns()}", "modules": [],
         "mig-instance": "7g", "gpu-memory": case["gpu-memory"],
         "timeout": spec.get("timeout", case["timeout"]),
-        "input-payload": json.dumps(spec.get("payload", {})),
+        "input-payload": json.dumps(spec.get("payload", {}) if payload is None else payload),
     }
     req = urllib.request.Request(f"http://127.0.0.1:{port}/invoke", json.dumps(body).encode(),
                                  {"Content-Type": "application/json"})
@@ -79,9 +80,9 @@ def request(port, case, block, user, payload_override=None):
     return status, text, time.time() - t0
 
 
-def step(port, case, block, user, label, want, max_s=None):
-    status, text, dt = request(port, case, block, user)
-    print(f"{label:<10} {block:<5} status={status} ms={dt*1000:.0f}", flush=True)
+def step(port, case, block, user, label, want, max_s=None, payload=None):
+    status, text, dt = request(port, case, block, user, payload)
+    print(f"{label:<24} {block:<5} status={status} ms={dt*1000:.0f}", flush=True)
     if status != want:
         raise Fail(f"{label}: {block} expected HTTP {want}, got {status}: {text[:300]}")
     if max_s is not None and dt > max_s:
@@ -150,6 +151,8 @@ def main():
 
     def watchdog():
         print(f"FAIL: global deadline {args.deadline}s exceeded", file=sys.stderr, flush=True)
+        os.kill(os.getpid(), signal.SIGTERM)  # -> SystemExit -> finally (teardown, logs, cleanup)
+        time.sleep(15)  # last resort if teardown itself is stuck
         if state["proc"]:
             try:
                 os.killpg(state["proc"].pid, signal.SIGKILL)
@@ -160,37 +163,47 @@ def main():
     wd.daemon = True
     wd.start()
 
+    def on_term(signum, frame):
+        raise SystemExit(1)
+    signal.signal(signal.SIGTERM, on_term)
+
     try:
-        try:
-            proc = state["proc"] = start_orchestrator(args, tmp, port)
-            user = "it-user"
-            for i in range(args.iterations):
-                step(port, case, "ok", user, f"ok-{i}" + (" cold" if i == 0 else ""), 200)
-            step(port, case, "fail", user, "error", 500)
-            step(port, case, "ok", user, "after-err", 200)
-            interval_s = 0.1
-            hang_to = case["hang"].get("timeout", 3)
-            step(port, case, "hang", user, "hang", 504, max_s=hang_to + interval_s + 10)
-            step(port, case, "ok", user, "after-hang", 200)
-        except Fail as e:
-            failed = True
-            print(f"FAIL: {e}", file=sys.stderr)
-        except Exception as e:  # harness bug or env problem; still tear down
-            failed = True
-            print(f"FAIL: unexpected {type(e).__name__}: {e}", file=sys.stderr)
-        if state["proc"]:
-            leaks = teardown(state["proc"])
-            if leaks:
-                failed = True
-                print("FAIL: leaked processes:\n  " + "\n  ".join(leaks), file=sys.stderr)
+        user = "it-user"
+        start_orchestrator(args, tmp, port, state)
+        for i in range(args.iterations):
+            step(port, case, "ok", user, f"ok-{i}" + (" cold" if i == 0 else ""), 200)
+        step(port, case, "fail", user, "error", 500)
+        step(port, case, "fail", user, "fail-repeat-same-client", 500, max_s=case["timeout"] / 2)
+        step(port, case, "ok", user, "ok-after-error", 200)
+        hang_to = case["hang"].get("timeout", 3)
+        step(port, case, "hang", user, "hang", 504, max_s=hang_to + 0.1 + 10)
+        # after a hang, the next invocation without the sleep (set to 0)
+        # this one should succeed
+        step(port, case, "hang", user, "hang-restart-same-client", 200,
+             payload=case["hang"].get("restart-payload", {"sleep-s": 0}))
+        step(port, case, "ok", user, "ok-after-hang", 200)
+    except Fail as e:
+        failed = True
+        print(f"FAIL: {e}", file=sys.stderr)
+    except BaseException as e:  # incl. SystemExit/KeyboardInterrupt: still tear down, then fail
+        failed = True
+        print(f"FAIL: interrupted/unexpected {type(e).__name__}: {e}", file=sys.stderr)
     finally:
-        wd.cancel()
-        if failed or args.keep_logs:
-            dst = os.path.join(args.build, "test-logs", name)
-            shutil.rmtree(dst, ignore_errors=True)
-            shutil.copytree(tmp, dst)
-            print(f"logs: {dst}")
-        shutil.rmtree(tmp, ignore_errors=True)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        try:
+            if state["proc"]:
+                leaks = teardown(state["proc"])
+                if leaks:
+                    failed = True
+                    print("FAIL: leaked processes:\n  " + "\n  ".join(leaks), file=sys.stderr)
+        finally:
+            wd.cancel()
+            if failed or args.keep_logs:
+                dst = os.path.join(args.build, "test-logs", name)
+                shutil.rmtree(dst, ignore_errors=True)
+                shutil.copytree(tmp, dst)
+                print(f"logs: {dst}")
+            shutil.rmtree(tmp, ignore_errors=True)
     print("FAIL" if failed else "PASS")
     return 1 if failed else 0
 

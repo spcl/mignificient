@@ -5,7 +5,8 @@
   "ok":   {"function": "func", "function-handler": "func",
            "payload": {"sleep-time": 0, "vec-elements": 1048576, "data-transfers": 4}, "expect": null},
   "fail": {"function": "func_fail", "function-handler": "func_fail"},
-  "hang": {"function": "func_hang", "function-handler": "func_hang", "payload": {"sleep-s": 30}, "timeout": 3},
+  "hang": {"function": "func_hang", "function-handler": "func_hang", "payload": {"sleep-s": 30}, "timeout": 3,
+           "restart-payload": {"sleep-s": 0}},
   "timeout": 60,
   "gpu-memory": 1024
 }
