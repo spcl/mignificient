@@ -4,7 +4,7 @@
 
 # Dependencies
 
-CUDA 11.6
+CUDA 11.6 (required, see below)
 
 cuDNN 8.9.7 for CUDA 11
 
@@ -13,6 +13,35 @@ libacl - if these are not available on your system (usually visible through comp
 https://download.savannah.nongnu.org/releases/acl/acl-2.3.2.tar.xz
 
 pybind11
+
+## Building on this branch (CUDA 11.6 required)
+
+Host builds must use CUDA 11.6, the same version as the executor container image and the conda PyTorch packages.
+A server built with another CUDA version reports a different number of device attributes (`CU_DEVICE_ATTRIBUTE_MAX` is 122 in 11.6, 125 in 11.8), which mismatches the 11.6 clients.
+CMake does not pick the toolkit for you: without the flags below it uses whatever `nvcc` is first on `PATH` (often `/usr/local/cuda`). Pass the compiler and root explicitly, put 11.6 first on `PATH`, and check `CMakeCache.txt` and `ldd` afterwards.
+CUDA 11.6 does not know `sm_89`; use `-DCMAKE_CUDA_ARCHITECTURES=86` (PTX is JIT-compiled on newer GPUs).
+
+```
+CUDA=/path/to/cuda-11.6                     # e.g. /opt/cuda/cuda-11.6
+# pinned iceoryx2 (v0.8.1) installed next to the build tree
+cmake --install <pinned-iceoryx2-build>/_deps/iceoryx2-build --prefix $PWD/build-cu116/iox2-install
+export PATH=$CUDA/bin:$PATH
+cmake -S . -B build-cu116 -DCMAKE_BUILD_TYPE=Release -DBUILD_ICEORYX2=TRUE -DCMAKE_CUDA_ARCHITECTURES=86 \
+  -DCMAKE_CUDA_COMPILER=$CUDA/bin/nvcc -DCUDAToolkit_ROOT=$CUDA \
+  -DCUDNN_DIR=<cudnn-8.9.7-for-cuda11-archive>/ \
+  -Dpybind11_DIR=<site-packages>/pybind11/share/cmake/pybind11 \
+  -DPython_EXECUTABLE=<python3.9-env>/bin/python \
+  -DCMAKE_PREFIX_PATH=$PWD/build-cu116/iox2-install
+cmake --build build-cu116 -j16
+```
+
+`-DPython_EXECUTABLE` selects the interpreter for the `_mignificient` executor module; its version must match the interpreter that runs the functions (3.9 for the conda environments used with the container image).
+Verify the toolkit:
+
+```
+grep -E 'CMAKE_CUDA_COMPILER:|CUDAToolkit_ROOT' build-cu116/CMakeCache.txt
+ldd build-cu116/gpuless/manager_device build-cu116/gpuless/libgpuless.so | grep -E 'cuda|cublas'   # only $CUDA/lib64 plus the system libcuda.so.1
+```
 
 ## Example of building on cluster
 
