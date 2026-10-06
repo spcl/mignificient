@@ -305,6 +305,19 @@ namespace mignificient { namespace orchestrator {
       "--user", fmt::format("{}:{}", getuid(), getgid())
     };
 
+    // iceoryx2 events are unix datagrams; a fresh container netns has max_dgram_qlen=10, so bursts of
+    // notifications overflow (FailedToDeliverSignal, lost wakeups). Use the host's value.
+    static const long dgram_qlen = [] {
+      long v = 512;
+      if(FILE* f = fopen("/proc/sys/net/unix/max_dgram_qlen", "r")) {
+        long x;
+        if(fscanf(f, "%ld", &x) == 1 && x > 0) v = x;
+        fclose(f);
+      }
+      return v;
+    }();
+    args.insert(args.end(), {"--sysctl", fmt::format("net.unix.max_dgram_qlen={}", dgram_qlen)});
+
     if(code_package.has_value()) {
       args.insert(args.end(), {"-v", fmt::format("{0}:{0}:ro", code_package.value())});
     }
