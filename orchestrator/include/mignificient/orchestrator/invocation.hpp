@@ -217,10 +217,19 @@ namespace mignificient { namespace orchestrator {
       return _timeout_us / 1000000;
     }
 
+    void respond_error(int32_t status)
+    {
+      auto resp = drogon::HttpResponse::newHttpResponse();
+      resp->setStatusCode(drogon::k500InternalServerError);
+      resp->setContentTypeCode(drogon::CT_APPLICATION_JSON);
+      resp->setBody(fmt::format("{{\"result\": null, \"error\": \"function returned {}\"}}", status));
+      _http_callback(resp);
+    }
+
     void respond_timeout()
     {
       auto resp = drogon::HttpResponse::newHttpResponse();
-      resp->setStatusCode(drogon::k200OK);
+      resp->setStatusCode(drogon::k504GatewayTimeout);
       resp->setContentTypeCode(drogon::CT_APPLICATION_JSON);
       resp->setBody(fmt::format("{{\"result\": null, \"error\": \"timeout after {} seconds\"}}", timeout_seconds()));
       _http_callback(resp);
@@ -229,7 +238,7 @@ namespace mignificient { namespace orchestrator {
     void respond_oom()
     {
       auto resp = drogon::HttpResponse::newHttpResponse();
-      resp->setStatusCode(drogon::k200OK);
+      resp->setStatusCode(drogon::k507InsufficientStorage);
       resp->setContentTypeCode(drogon::CT_APPLICATION_JSON);
       resp->setBody("{\"result\": null, \"error\": \"out of GPU memory\"}");
       _http_callback(resp);

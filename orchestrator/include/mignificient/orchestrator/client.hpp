@@ -410,7 +410,7 @@ namespace mignificient { namespace orchestrator {
       return _pending_invocations.front().get();
     }
 
-    void finished(std::string_view response);
+    void finished(std::string_view response, int32_t status = 0);
 
     void yield();
 

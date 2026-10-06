@@ -58,6 +58,7 @@ namespace mignificient { namespace executor {
     //iox::vector<uint8_t, CAPACITY> data;
     uint8_t data[CAPACITY];
     size_t size;
+    int32_t status; // 0 = ok, <0 = function error
   };
 
   struct CommunicationIceoryxV1

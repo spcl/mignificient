@@ -4,6 +4,7 @@ import importlib.util
 import json
 import numpy as np
 import os
+import traceback
 
 import mignificient
 
@@ -43,7 +44,11 @@ if __name__ == "__main__":
             print("Empty payload, quit")
             break
 
-        size = func(mignificient.Invocation(runtime, invocation_data, runtime.result()))
+        try:
+            size = func(mignificient.Invocation(runtime, invocation_data, runtime.result()))
+        except Exception:
+            traceback.print_exc()
+            size = -1
 
         runtime.finish(size)
 
