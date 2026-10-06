@@ -46,7 +46,7 @@ namespace mignificient { namespace orchestrator {
     pid_t pid() const { return _pid; }
 
   private:
-    pid_t _pid;
+    pid_t _pid = -1;
   };
 
   /**
@@ -110,7 +110,7 @@ namespace mignificient { namespace orchestrator {
         _user(user),
         _gpu_memory(gpu_memory),
         _ld_preload(ld_preload),
-        _pid(0),
+        _pid(-1),
         _function(function),
         _function_handler(function_handler),
         _device(device)
@@ -120,9 +120,11 @@ namespace mignificient { namespace orchestrator {
 
       virtual void stop()
       {
+        // Never signal pid <= 0: kill(0) / kill(-1) hit our own process group / every process.
         if(_pid > 0) {
           kill(_pid, SIGKILL);
           waitpid(_pid, nullptr, 0);
+          _pid = -1;
         }
       }
 

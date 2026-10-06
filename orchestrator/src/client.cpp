@@ -126,18 +126,17 @@ namespace mignificient { namespace orchestrator {
 
     _status = ClientStatus::NOT_ACTIVE;
 
-    // Kill executor
-    kill(_executor->pid(), SIGKILL);
+    // Kill executor (process or container)
+    _executor->stop();
 
     // Gpuless should be exiting on its own; give it a moment, then force kill
-    int status;
-    pid_t result = waitpid(_gpuless_server.pid(), &status, WNOHANG);
-    if (result == 0) {
+    pid_t gpuless_pid = _gpuless_server.pid();
+    if (gpuless_pid > 0 && waitpid(gpuless_pid, nullptr, WNOHANG) == 0) {
       // Not yet exited, force kill
-      kill(_gpuless_server.pid(), SIGKILL);
-      waitpid(_gpuless_server.pid(), nullptr, 0);
+      kill(gpuless_pid, SIGKILL);
+      waitpid(gpuless_pid, nullptr, 0);
     }
-    waitpid(_executor->pid(), nullptr, 0);
+    gpu_instance()->remove_pending_invocations(this);
 
     auto kill_end = std::chrono::high_resolution_clock::now();
     double kill_time_us = std::chrono::duration<double, std::micro>(kill_end - kill_start).count();
@@ -166,7 +165,7 @@ namespace mignificient { namespace orchestrator {
     }
 
     // Unregister executor from GPU instance
-    gpu_instance()->close_executor(_executor->pid());
+    gpu_instance()->close_executor(_executor.get());
   }
 
   void Client::timeout_kill()
@@ -176,9 +175,13 @@ namespace mignificient { namespace orchestrator {
     _status = ClientStatus::NOT_ACTIVE;
 
     // Kill gpuless server (always bare-metal) and executor
-    kill(_gpuless_server.pid(), SIGKILL);
-    waitpid(_gpuless_server.pid(), nullptr, 0);
+    pid_t gpuless_pid = _gpuless_server.pid();
+    if (gpuless_pid > 0) {
+      kill(gpuless_pid, SIGKILL);
+      waitpid(gpuless_pid, nullptr, 0);
+    }
     _executor->stop();
+    gpu_instance()->remove_pending_invocations(this);
 
     auto kill_end = std::chrono::high_resolution_clock::now();
     double kill_time_us = std::chrono::duration<double, std::micro>(kill_end - kill_start).count();
@@ -208,7 +211,7 @@ namespace mignificient { namespace orchestrator {
     }
 
     // Unregister executor from GPU instance
-    gpu_instance()->close_executor(_executor->pid());
+    gpu_instance()->close_executor(_executor.get());
   }
 
 }}
