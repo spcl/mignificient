@@ -1,14 +1,35 @@
 {
   "address": "http://127.0.0.1:10000",
+  "mode": "independent",
   "iterations": 2,
   "parallel-requests": 2,
   "different-users": true,
-  "input": {
-    "function": "func",
-    "function-path": "${EXAMPLES_DIR}/libvector_add.so",
-    "modules": [],
-    "mig-instance": "7g",
-    "gpu-memory": 1024,
-    "input-payload": "{ \"sleep-time\": 500000, \"vec-elements\": 1024, \"data-transfers\": 1024}"
-  }
+  "inputs": [
+    {
+      "function-language": "cpp",
+      "function": "func",
+      "function-handler": "func",
+      "function-path": "@CMAKE_BINARY_DIR@/examples/libvector_add.so",
+      "cuda-binary": "",
+      "ld-preload": "",
+      "modules": [],
+      "mig-instance": "7g",
+      "gpu-memory": 1024,
+      "timeout": 30,
+      "input-payload": "{ \"sleep-time\": 100000, \"vec-elements\": 1024, \"data-transfers\": 10}"
+    },
+    {
+      "function-language": "cpp",
+      "function": "func",
+      "function-handler": "func",
+      "function-path": "@CMAKE_BINARY_DIR@/examples/libvector_add.so",
+      "cuda-binary": "",
+      "ld-preload": "",
+      "modules": [],
+      "mig-instance": "7g",
+      "gpu-memory": 1024,
+      "timeout": 30,
+      "input-payload": "{ \"sleep-time\": 100000, \"vec-elements\": 1024, \"data-transfers\": 10}"
+    }
+  ]
 }
