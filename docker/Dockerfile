@@ -54,16 +54,14 @@ COPY --from=builder ${B}/gpuless/libgpuless.so ${B}/gpuless/libgpuless.so
 COPY --from=builder /opt/cuda-11.6/lib64/libcudart.so.11.0* /opt/cuda-11.6/lib64/
 COPY --from=builder /opt/cuda-11.6/lib64/stubs/libcuda.so.1 /opt/cuda-11.6/lib64/stubs/libcuda.so.1
 
-# libgpuless is linked against libcudnn.so.8; ship only the 142 KB dispatch library so the preload resolves.
-# The cuDNN implementation libraries are not shipped (packages bring their own).
-COPY --from=builder /opt/cudnn-8.9.7/lib/libcudnn.so.8* /opt/cuda-11.6/lib64/
-
-# No /opt/cudnn: function packages bring their own.
+# No cuDNN at all: libgpuless does not link it, and function packages bring their own
+# (e.g. torch/lib/libcudnn.so.8), which must win the soname.
 ENV LD_LIBRARY_PATH="/opt/cuda-11.6/lib64:/opt/cuda-11.6/lib64/stubs"
 WORKDIR /code
 
 # Fail the build if a runtime dependency is missing.
 RUN for f in /opt/mignificient/build/gpuless/libgpuless.so /opt/mignificient/build/executor/bin/executor_cpp \
       /opt/mignificient/build/executor/libexecutor_lib.so /opt/mignificient/build/executor/mignificient/_mignificient*.so; do \
-      if ldd "$f" | grep -q "not found"; then ldd "$f"; exit 1; fi; done
+      if ldd "$f" | grep -q "not found"; then ldd "$f"; exit 1; fi; done && \
+    if ldd /opt/mignificient/build/gpuless/libgpuless.so | grep -q libcudnn; then echo "libgpuless must not depend on cuDNN"; exit 1; fi
 RUN PYTHONPATH=/opt/mignificient/build/executor python3.9 -c "import mignificient"
