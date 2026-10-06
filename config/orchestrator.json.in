@@ -34,7 +34,7 @@
     "threads": 1
   },
   "executor": {
-    "type": "container",
+    "type": "bare-metal",
     "use-vmm": true,
     "poll-sleep": true,
     "poll-gpuless-sleep": true,

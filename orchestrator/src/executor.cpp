@@ -1,5 +1,7 @@
 #include <mignificient/orchestrator/executor.hpp>
 
+#include <cstdio>
+#include <cstdlib>
 #include <fcntl.h>
 #include <spawn.h>
 #include <unistd.h>
@@ -249,64 +251,209 @@ namespace mignificient { namespace orchestrator {
     return true;
   }
 
-  bool SarusContainerExecutorCpp::start(bool poll_sleep, int cpu_idx)
+  static std::string _build_docker_command(
+    const std::string& container_runtime,
+    const std::string& image,
+    const std::optional<std::string>& code_package,
+    const std::vector<std::pair<std::string, std::string>>& env_vars,
+    const std::vector<std::string>& cmd
+  )
   {
-    //sarus run -t -e POLL_TYPE=wait -e EXECUTOR_TYPE=shmem -e MANAGER_IP=148.187.105.35 -e CUDA_BINARY=/artifact/benchmarks/microbenchmark/latency/latency_size.so -e FUNCTION_NAME=function -e CONTAINER_NAME=client_0 -e FUNCTION_FILE=/artifact/benchmarks/microbenchmark/latency/latency_size.so --mount type=bind,source=/tmp,target=/tmp --mount type=bind,source=/scratch/mcopik/gpus/mignificient-artifact,target=/artifact spcleth/mignificient:executor-sarus bash -c "LD_LIBRARY_PATH=/usr/local/cuda-11.6/compat/ LD_PRELOAD=/build/gpuless/libgpuless.so /build/executor/bin/executor_cpp"
+    std::string command = container_runtime + " run -d --sysctl net.core.rmem_default=2097152 --sysctl net.core.rmem_max=2097152 --user 1000:1000 -v /opt/miniconda3/envs/cuda_116_pytorch/:/code2 --mount type=bind,source=/dev/shm,target=/dev/shm --mount type=bind,source=/home/mcopik/.config/iceoryx2,target=/etc/iceoryx2 --mount type=bind,source=/tmp/iceoryx2,target=/tmp/iceoryx2 ";
 
-    // TODO: do we need -t here?
-    std::vector<std::string> argv{
-      "sarus", "run", "-t"
-    };
-
-    argv.emplace_back("-e");
-    argv.emplace_back(fmt::format("POLL_TYPE={}", poll_sleep ? "wait" : "poll"));
-    argv.emplace_back("EXECUTOR_TYPE=shmem");
-    argv.emplace_back(fmt::format("CONTAINER_NAME={}", _user));
-    //argv.emplace_back(fmt::format("FUNCTION_NAME={}", _function));
-    //argv.emplace_back(fmt::format("CUDA_BINARY={}", _function_path));
-    //argv.emplace_back(fmt::format("FUNCTION_FILE={}", _function_path));
-
-    auto& envs = Environment::instance();
-    envs.restart();
-    //envs.add(const_cast<char*>(poll_type.c_str()));
-    //envs.add(const_cast<char*>(fname.c_str()));
-    //envs.add(const_cast<char*>(cbinary.c_str()));
-    //envs.add(const_cast<char*>(ffile.c_str()));
-    //envs.add(const_cast<char*>(preload.c_str()));
-    //envs.add(const_cast<char*>(exec_type.c_str()));
-    //envs.add(const_cast<char*>(container_name.c_str()));
-    //envs.add(nullptr);
-
-    posix_spawnattr_t attr;
-    posix_spawn_file_actions_t file_actions;
-
-    std::string log_name = fmt::format("output_executor_{}.log", _user);
-    int log_fd = open(log_name.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (log_fd == -1) {
-        perror("open");
-        exit(1);
+    if(code_package.has_value()) {
+      if(container_runtime == "sarus") {
+        command += fmt::format(" --mount type=bind,source={},destination=/code", code_package.value());
+      } else {
+        command += fmt::format(" -v {}:/code", code_package.value());
+      }
     }
 
-    posix_spawnattr_init(&attr);
-    posix_spawn_file_actions_init(&file_actions);
 
-    posix_spawn_file_actions_adddup2(&file_actions, log_fd, STDOUT_FILENO);
-    posix_spawn_file_actions_adddup2(&file_actions, log_fd, STDERR_FILENO);
+    for(const auto& [key, val] : env_vars) {
+      command += fmt::format(" -e {}={}", key, val);
+    }
 
-    //int status = posix_spawnp(&_pid, argv[0], &file_actions, &attr, argv, envs.data());
+    command += " " + image;
 
-    //if (status == 0) {
-    //  spdlog::info("Child process spawned successfully, PID: {}", _pid);
-    //} else {
-    //  spdlog::error("posix_spawn failed: %s\n", strerror(status));
-    //  return false;
-    //}
+    for(const auto& c : cmd) {
+      command += " " + c;
+    }
 
-    //// Clean up
-    //posix_spawnattr_destroy(&attr);
-    //posix_spawn_file_actions_destroy(&file_actions);
+    return command;
+  }
 
+  static std::string _capture_container_id(const std::string& command)
+  {
+    std::array<char, 128> buffer;
+    std::string result;
+    FILE* pipe = popen(command.c_str(), "r");
+    if(!pipe) {
+      spdlog::error("Failed to run container command: {}", command);
+      return "";
+    }
+    while(fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
+      result += buffer.data();
+    }
+    int status = pclose(pipe);
+    if(status != 0) {
+      spdlog::error("Container command failed with status {}: {}", status, command);
+      return "";
+    }
+    // Trim trailing whitespace/newline
+    while(!result.empty() && (result.back() == '\n' || result.back() == '\r' || result.back() == ' ')) {
+      result.pop_back();
+    }
+    return result;
+  }
+
+  bool DockerContainerExecutorCpp::start(bool poll_sleep, int cpu_idx)
+  {
+    std::string preload;
+    if(_ld_preload.has_value()) {
+      preload = fmt::format("{}:{}", _ld_preload.value(), _gpuless_lib);
+    } else {
+      preload = _gpuless_lib;
+    }
+
+    // Determine function file path: if code_package is provided, map to /code/<basename>
+    std::string function_file = _function_path;
+    std::string cuda_binary = _function_path;
+    std::string gpuless_elf = _function_path + ".txt";
+    if(_code_package.has_value()) {
+      // Extract basename from function_path
+      auto pos = _function_path.find_last_of('/');
+      std::string basename = (pos != std::string::npos) ? _function_path.substr(pos + 1) : _function_path;
+      function_file = "/code/" + basename;
+      cuda_binary = "/code/" + basename;
+      gpuless_elf = "/code/" + basename + ".txt";
+    }
+
+    std::vector<std::pair<std::string, std::string>> env_vars = {
+      {"POLL_TYPE", poll_sleep ? "wait" : "poll"},
+      {"EXECUTOR_TYPE", "shmem"},
+      {"CONTAINER_NAME", _user},
+      {"FUNCTION_HANDLER", _function_handler},
+      {"FUNCTION_FILE", function_file},
+      {"CUDA_BINARY", cuda_binary},
+      {"LD_PRELOAD", preload},
+      {"IPC_BACKEND", ipc::IPCConfig::backend_string(_ipc_config.backend)},
+      {"MIGNIFICIENT_MAX_GPU_MEMORY", std::to_string(_gpu_memory)},
+      {"GPULESS_ELF_DEFINITION", gpuless_elf}
+    };
+
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+    env_vars.emplace_back("GPULESS_REQUEST_SIZE", std::to_string(_ipc_config.buffer_configs.at("gpuless-executor").request_size));
+    env_vars.emplace_back("GPULESS_RESPONSE_SIZE", std::to_string(_ipc_config.buffer_configs.at("gpuless-executor").response_size));
+    env_vars.emplace_back("GPULESS_QUEUE_CAPACITY", std::to_string(_ipc_config.buffer_configs.at("gpuless-executor").queue_capacity));
+#endif
+
+    std::string command = _build_docker_command(
+      _container_runtime, _image, _code_package, env_vars,
+      {_cpp_executor}
+    );
+
+    spdlog::info("Starting container executor: {}", command);
+
+    _container_id = _capture_container_id(command);
+    if(_container_id.empty()) {
+      spdlog::error("Failed to start container for user {}", _user);
+      return false;
+    }
+
+    spdlog::info("Container started with ID: {} for user {}", _container_id, _user);
     return true;
+  }
+
+  void DockerContainerExecutorCpp::stop()
+  {
+    if(!_container_id.empty()) {
+      std::string command = fmt::format("{} kill {}", _container_runtime, _container_id);
+      spdlog::info("Stopping container: {}", command);
+      int ret = system(command.c_str());
+      if(ret != 0) {
+        spdlog::warn("Failed to kill container {}", _container_id);
+      }
+      _container_id.clear();
+    }
+  }
+
+  bool DockerContainerExecutorPython::start(bool poll_sleep, int cpu_idx)
+  {
+    std::string preload;
+    if(_ld_preload.has_value()) {
+      preload = fmt::format("{}:{}", _ld_preload.value(), _gpuless_lib);
+    } else {
+      preload = _gpuless_lib;
+    }
+
+    std::string function_file = _function_path;
+    std::string cuda_binary = _cuda_binary;
+    std::string gpuless_elf = _cubin_analysis;
+    if(_code_package.has_value()) {
+      auto pos = _function_path.find_last_of('/');
+      std::string basename = (pos != std::string::npos) ? _function_path.substr(pos + 1) : _function_path;
+      function_file = "/code/" + basename;
+
+      pos = _cuda_binary.find_last_of('/');
+      basename = (pos != std::string::npos) ? _cuda_binary.substr(pos + 1) : _cuda_binary;
+      cuda_binary = "/code/" + basename;
+
+      pos = _cubin_analysis.find_last_of('/');
+      basename = (pos != std::string::npos) ? _cubin_analysis.substr(pos + 1) : _cubin_analysis;
+      gpuless_elf = "/code/" + basename;
+    }
+
+    std::vector<std::pair<std::string, std::string>> env_vars = {
+      {"POLL_TYPE", poll_sleep ? "wait" : "poll"},
+      {"EXECUTOR_TYPE", "shmem"},
+      {"CONTAINER_NAME", _user},
+      {"FUNCTION_HANDLER", _function_handler},
+      {"FUNCTION_FILE", function_file},
+      //{"PYTHONPATH", "/code/.python_packages:/opt/mignificient/build/executor"},
+      {"PYTHONPATH", "/code2/lib/python3.9/site-packages/:/opt/mignificient/build/executor"},
+      {"CUDA_BINARY", cuda_binary},
+      //{"LD_PRELOAD", preload},
+      {"LD_PRELOAD", "/opt/mignificient/build/gpuless/libgpuless.so"},
+      {"IPC_BACKEND", ipc::IPCConfig::backend_string(_ipc_config.backend)},
+      {"MIGNIFICIENT_MAX_GPU_MEMORY", std::to_string(_gpu_memory)},
+      {"GPULESS_ELF_DEFINITION", gpuless_elf}
+    };
+
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+    env_vars.emplace_back("GPULESS_REQUEST_SIZE", std::to_string(_ipc_config.buffer_configs.at("gpuless-executor").request_size));
+    env_vars.emplace_back("GPULESS_RESPONSE_SIZE", std::to_string(_ipc_config.buffer_configs.at("gpuless-executor").response_size));
+    env_vars.emplace_back("GPULESS_QUEUE_CAPACITY", std::to_string(_ipc_config.buffer_configs.at("gpuless-executor").queue_capacity));
+#endif
+
+    std::string command = _build_docker_command(
+      _container_runtime, _image, _code_package, env_vars,
+      {_python_interpreter, _python_executor}
+    );
+
+    spdlog::info("Starting container executor (Python): {}", command);
+
+    _container_id = _capture_container_id(command);
+    if(_container_id.empty()) {
+      spdlog::error("Failed to start Python container for user {}", _user);
+      return false;
+    }
+
+    spdlog::info("Container started with ID: {} for user {}", _container_id, _user);
+    return true;
+  }
+
+  void DockerContainerExecutorPython::stop()
+  {
+    if(!_container_id.empty()) {
+      std::string command = fmt::format("{} kill {}", _container_runtime, _container_id);
+      spdlog::info("Stopping container: {}", command);
+      int ret = system(command.c_str());
+      if(ret != 0) {
+        spdlog::warn("Failed to kill container {}", _container_id);
+      }
+      _container_id.clear();
+    }
   }
 
 }}

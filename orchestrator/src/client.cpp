@@ -175,11 +175,10 @@ namespace mignificient { namespace orchestrator {
 
     _status = ClientStatus::NOT_ACTIVE;
 
-    // Kill gpuless server and executor processes
+    // Kill gpuless server (always bare-metal) and executor
     kill(_gpuless_server.pid(), SIGKILL);
-    kill(_executor->pid(), SIGKILL);
     waitpid(_gpuless_server.pid(), nullptr, 0);
-    waitpid(_executor->pid(), nullptr, 0);
+    _executor->stop();
 
     auto kill_end = std::chrono::high_resolution_clock::now();
     double kill_time_us = std::chrono::duration<double, std::micro>(kill_end - kill_start).count();

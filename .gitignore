@@ -35,3 +35,6 @@
 gpuless/test
 build*
 logs
+
+# cuDNN archive required by docker/Dockerfile.cuda (not redistributable)
+docker/*.tar.xz

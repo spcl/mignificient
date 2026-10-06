@@ -37,7 +37,7 @@ set_target_properties(executor_cpp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_C
 
 set(BARE_METAL_EXECUTOR_CPP ${CMAKE_BINARY_DIR}/executor/bin/executor_cpp PARENT_SCOPE)
 
-find_package(Python COMPONENTS Interpreter Development)
+find_package(Python 3.9 EXACT COMPONENTS Interpreter Development)
 find_package(pybind11 CONFIG)
 
 if(Python_FOUND AND pybind11_FOUND)

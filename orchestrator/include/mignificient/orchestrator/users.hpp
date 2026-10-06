@@ -293,6 +293,9 @@ namespace mignificient { namespace orchestrator {
 
       auto spawn_time = std::chrono::high_resolution_clock::now();
 
+      bool use_container = _config["type"].asString() == "container";
+
+      // GPUless server always runs bare-metal on the host
       GPUlessServer gpuless_server;
       gpuless_server.start(
         _ipc_config, client_id, *selected_gpu,
@@ -303,30 +306,59 @@ namespace mignificient { namespace orchestrator {
         gpuless_cpu_idx
       );
 
+      std::string container_runtime = _config.isMember("container-runtime") ? _config["container-runtime"].asString() : "docker";
 
       std::unique_ptr<Executor> executor;
-      if(invocation->language() == Language::CPP) {
+      if(use_container) {
 
-        auto exec = std::make_unique<BareMetalExecutorCpp>(
-          _ipc_config, client_id, fname, fhandler, invocation->function_path(),
-          invocation->gpu_memory(), *selected_gpu, _config["bare-metal-executor"],
-          invocation->ld_preload()
-        );
-        exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
+        if(invocation->language() == Language::CPP) {
 
-        executor = std::move(exec);
+          auto exec = std::make_unique<DockerContainerExecutorCpp>(
+            _ipc_config, client_id, fname, fhandler, invocation->function_path(),
+            invocation->gpu_memory(), *selected_gpu, _config["container-executor"],
+            invocation->ld_preload(), invocation->code_package(), container_runtime
+          );
+          exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
+
+          executor = std::move(exec);
+        } else {
+
+          auto exec = std::make_unique<DockerContainerExecutorPython>(
+            _ipc_config, client_id, fname, fhandler, invocation->function_path(),
+            invocation->cuda_binary(), invocation->cubin_analysis(),
+            invocation->gpu_memory(), *selected_gpu, _config["container-executor"],
+            invocation->ld_preload(), invocation->code_package(), container_runtime
+          );
+          exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
+
+          executor = std::move(exec);
+        }
+
       } else {
 
-        auto exec = std::make_unique<BareMetalExecutorPython>(
-          _ipc_config, client_id, fname, fhandler, invocation->function_path(),
-          invocation->cuda_binary(), invocation->cubin_analysis(),
-          invocation->gpu_memory(), *selected_gpu,
-          _config["bare-metal-executor"],
-          invocation->ld_preload()
-        );
-        exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
+        if(invocation->language() == Language::CPP) {
 
-        executor = std::move(exec);
+          auto exec = std::make_unique<BareMetalExecutorCpp>(
+            _ipc_config, client_id, fname, fhandler, invocation->function_path(),
+            invocation->gpu_memory(), *selected_gpu, _config["bare-metal-executor"],
+            invocation->ld_preload()
+          );
+          exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
+
+          executor = std::move(exec);
+        } else {
+
+          auto exec = std::make_unique<BareMetalExecutorPython>(
+            _ipc_config, client_id, fname, fhandler, invocation->function_path(),
+            invocation->cuda_binary(), invocation->cubin_analysis(),
+            invocation->gpu_memory(), *selected_gpu,
+            _config["bare-metal-executor"],
+            invocation->ld_preload()
+          );
+          exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
+
+          executor = std::move(exec);
+        }
 
       }
 

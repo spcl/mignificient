@@ -2,10 +2,12 @@
 #define __MIGNIFICIENT_ORCHESTRATOR_EXECUTOR_HPP__
 
 #include <array>
+#include <csignal>
 #include <cstring>
 #include <memory>
 #include <optional>
 #include <string>
+#include <sys/wait.h>
 
 #include <spdlog/spdlog.h>
 #include <spdlog/fmt/bundled/core.h>
@@ -116,6 +118,14 @@ namespace mignificient { namespace orchestrator {
 
       virtual ~Executor() = default;
 
+      virtual void stop()
+      {
+        if(_pid > 0) {
+          kill(_pid, SIGKILL);
+          waitpid(_pid, nullptr, 0);
+        }
+      }
+
       const std::optional<std::string>& ld_preload() const
       {
         return _ld_preload;
@@ -214,10 +224,11 @@ namespace mignificient { namespace orchestrator {
     std::string _gpuless_lib;
   };
 
-  class SarusContainerExecutorCpp : public Executor {
+  class DockerContainerExecutorCpp : public Executor {
   public:
-      using Executor::Executor;
-    SarusContainerExecutorCpp(
+    using Executor::Executor;
+
+    DockerContainerExecutorCpp(
         const ipc::IPCConfig& ipc_config,
         const std::string& user_id,
         const std::string& function,
@@ -225,20 +236,76 @@ namespace mignificient { namespace orchestrator {
         const std::string& function_path,
         float gpu_memory, GPUInstance& device,
         const Json::Value& config,
-        const std::optional<std::string>& ld_preload
+        const std::optional<std::string>& ld_preload,
+        const std::optional<std::string>& code_package,
+        const std::string& container_runtime = "docker"
     ):
       Executor(ipc_config, user_id, function, function_handler, gpu_memory, device, ld_preload),
       _function_path(function_path),
       _cpp_executor(config["cpp"].asString()),
-      _gpuless_lib(config["gpuless-lib"].asString())
+      _gpuless_lib(config["gpuless-lib"].asString()),
+      _image(config["image"].asString()),
+      _code_package(code_package),
+      _container_runtime(container_runtime)
     {}
 
     bool start(bool poll_sleep, int cpu_idx = -1);
+    void stop() override;
 
   private:
     std::string _cpp_executor;
     std::string _function_path;
     std::string _gpuless_lib;
+    std::string _image;
+    std::optional<std::string> _code_package;
+    std::string _container_runtime;
+    std::string _container_id;
+  };
+
+  class DockerContainerExecutorPython : public Executor {
+  public:
+    using Executor::Executor;
+
+    DockerContainerExecutorPython(
+        const ipc::IPCConfig& ipc_config,
+        const std::string& user_id,
+        const std::string& function,
+        const std::string& function_handler,
+        const std::string& function_path,
+        const std::string& cuda_binary,
+        const std::string& cubin_analysis,
+        float gpu_memory, GPUInstance& device,
+        const Json::Value& config,
+        const std::optional<std::string>& ld_preload,
+        const std::optional<std::string>& code_package,
+        const std::string& container_runtime = "docker"
+    ):
+      Executor(ipc_config, user_id, function, function_handler, gpu_memory, device, ld_preload),
+      _function_path(function_path),
+      _cuda_binary(cuda_binary),
+      _cubin_analysis(cubin_analysis),
+      _python_interpreter(config["python"][0].asString()),
+      _python_executor(config["python"][1].asString()),
+      _gpuless_lib(config["gpuless-lib"].asString()),
+      _image(config["image"].asString()),
+      _code_package(code_package),
+      _container_runtime(container_runtime)
+    {}
+
+    bool start(bool poll_sleep, int cpu_idx = -1);
+    void stop() override;
+
+  private:
+    std::string _function_path;
+    std::string _cuda_binary;
+    std::string _cubin_analysis;
+    std::string _python_interpreter;
+    std::string _python_executor;
+    std::string _gpuless_lib;
+    std::string _image;
+    std::optional<std::string> _code_package;
+    std::string _container_runtime;
+    std::string _container_id;
   };
 
 }}
