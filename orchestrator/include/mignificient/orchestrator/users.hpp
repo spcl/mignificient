@@ -367,7 +367,7 @@ namespace mignificient { namespace orchestrator {
             invocation->cuda_binary(), invocation->cubin_analysis(),
             invocation->gpu_memory(), *selected_gpu,
             _config["bare-metal-executor"],
-            invocation->ld_preload()
+            invocation->ld_preload(), invocation->code_package()
           );
           exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
 

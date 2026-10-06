@@ -54,6 +54,7 @@
       "image": "spcleth/mignificient:executor",
       "cpp": "/opt/mignificient/build/executor/bin/executor_cpp",
       "python": ["/usr/bin/python3", "/opt/mignificient/build/executor/bin/executor_python.py"],
+      "pythonpath": "/opt/mignificient/build/executor/",
       "gpuless-lib": "/opt/mignificient/build/gpuless/libgpuless.so",
       "gpuless-exec": "${CMAKE_BINARY_DIR}/gpuless/manager_device"
     }

@@ -7,6 +7,8 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
+#include <vector>
 #include <sys/wait.h>
 
 #include <spdlog/spdlog.h>
@@ -187,11 +189,19 @@ namespace mignificient { namespace orchestrator {
     std::string _gpuless_lib;
   };
 
-  class BareMetalExecutorPython : public Executor {
-  public:
-    using Executor::Executor;
+  /**
+   * Argv + environment of an executor process. The bare-metal launcher spawns it,
+   * the container launcher passes it to `<runtime> run`.
+   */
+  struct LaunchSpec {
+    std::vector<std::string> argv;
+    std::vector<std::pair<std::string, std::string>> env;
+  };
 
-    BareMetalExecutorPython(
+  class ExecutorPython : public Executor {
+  public:
+
+    ExecutorPython(
         const ipc::IPCConfig& ipc_config,
         const std::string& user_id,
         const std::string& function,
@@ -202,7 +212,8 @@ namespace mignificient { namespace orchestrator {
         float gpu_memory,
         GPUInstance& device,
         const Json::Value& config,
-        std::optional<std::string> ld_preload
+        const std::optional<std::string>& ld_preload,
+        const std::optional<std::string>& code_package
     ):
       Executor(ipc_config, user_id, function, function_handler, gpu_memory, device, ld_preload),
       _function_path(function_path),
@@ -211,12 +222,17 @@ namespace mignificient { namespace orchestrator {
       _python_interpreter(config["python"][0].asString()),
       _python_executor(config["python"][1].asString()),
       _python_path(config["pythonpath"].asString()),
-      _gpuless_lib(config["gpuless-lib"].asString())
+      _gpuless_lib(config["gpuless-lib"].asString()),
+      _code_package(code_package)
     {}
 
-    bool start(bool poll_sleep, int cpu_idx = -1);
+    /**
+     * The single launch description of a Python executor, for both launchers.
+     * Interpreter: <code-package>/env/bin/python, or the configured one without a package.
+     */
+    LaunchSpec python_launch(bool poll_sleep, int cpu_idx) const;
 
-  private:
+  protected:
     std::string _function_path;
     std::string _cuda_binary;
     std::string _cubin_analysis;
@@ -224,6 +240,14 @@ namespace mignificient { namespace orchestrator {
     std::string _python_executor;
     std::string _python_path;
     std::string _gpuless_lib;
+    std::optional<std::string> _code_package;
+  };
+
+  class BareMetalExecutorPython : public ExecutorPython {
+  public:
+    using ExecutorPython::ExecutorPython;
+
+    bool start(bool poll_sleep, int cpu_idx = -1);
   };
 
   class DockerContainerExecutorCpp : public Executor {
@@ -264,9 +288,8 @@ namespace mignificient { namespace orchestrator {
     std::string _container_id;
   };
 
-  class DockerContainerExecutorPython : public Executor {
+  class DockerContainerExecutorPython : public ExecutorPython {
   public:
-    using Executor::Executor;
 
     DockerContainerExecutorPython(
         const ipc::IPCConfig& ipc_config,
@@ -282,15 +305,11 @@ namespace mignificient { namespace orchestrator {
         const std::optional<std::string>& code_package,
         const std::string& container_runtime = "docker"
     ):
-      Executor(ipc_config, user_id, function, function_handler, gpu_memory, device, ld_preload),
-      _function_path(function_path),
-      _cuda_binary(cuda_binary),
-      _cubin_analysis(cubin_analysis),
-      _python_interpreter(config["python"][0].asString()),
-      _python_executor(config["python"][1].asString()),
-      _gpuless_lib(config["gpuless-lib"].asString()),
+      ExecutorPython(
+        ipc_config, user_id, function, function_handler, function_path, cuda_binary, cubin_analysis,
+        gpu_memory, device, config, ld_preload, code_package
+      ),
       _image(config["image"].asString()),
-      _code_package(code_package),
       _container_runtime(container_runtime)
     {}
 
@@ -298,14 +317,7 @@ namespace mignificient { namespace orchestrator {
     void stop() override;
 
   private:
-    std::string _function_path;
-    std::string _cuda_binary;
-    std::string _cubin_analysis;
-    std::string _python_interpreter;
-    std::string _python_executor;
-    std::string _gpuless_lib;
     std::string _image;
-    std::optional<std::string> _code_package;
     std::string _container_runtime;
     std::string _container_id;
   };
