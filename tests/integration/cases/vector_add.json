@@ -7,6 +7,9 @@
   "fail": {"function": "func_fail", "function-handler": "func_fail"},
   "hang": {"function": "func_hang", "function-handler": "func_hang", "payload": {"sleep-s": 30}, "timeout": 3,
            "restart-payload": {"sleep-s": 0}},
+  "switch": {"function": "func", "function-handler": "func_fail"},
+  "badpath": {"function": "func", "function-handler": "func", "function-path": "/nonexistent/libnone.so",
+              "payload": {"sleep-time": 0, "vec-elements": 1024, "data-transfers": 1}},
   "timeout": 60,
   "gpu-memory": 1024
 }

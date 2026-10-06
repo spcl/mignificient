@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Integration harness: orchestrator -> N ok requests -> error -> hang -> recovery -> teardown/leak check.
+"""Integration harness: orchestrator -> N ok requests -> handler switch + bad config -> error -> hang -> recovery -> teardown/leak check.
 Exit 0 = pass, 1 = fail. Python stdlib only."""
 import argparse, json, os, shutil, signal, socket, subprocess, sys, tempfile, threading, time
 import urllib.error, urllib.request
@@ -61,7 +61,7 @@ def request(port, case, block, user, payload=None):
     # client key = user+function and the executor binds the symbol once, so each block is its own client
     body = {
         "function": spec["function"], "function-handler": spec.get("function-handler", spec["function"]),
-        "function-language": case["language"], "function-path": case["function-path"],
+        "function-language": case["language"], "function-path": spec.get("function-path", case["function-path"]),
         "user": user, "uuid": f"it-{block}-{time.time_ns()}", "modules": [],
         "mig-instance": "7g", "gpu-memory": case["gpu-memory"],
         "timeout": spec.get("timeout", case["timeout"]),
@@ -152,7 +152,7 @@ def main():
     def watchdog():
         print(f"FAIL: global deadline {args.deadline}s exceeded", file=sys.stderr, flush=True)
         os.kill(os.getpid(), signal.SIGTERM)  # -> SystemExit -> finally (teardown, logs, cleanup)
-        time.sleep(15)  # last resort if teardown itself is stuck
+        time.sleep(30)  # last resort if teardown itself is stuck
         if state["proc"]:
             try:
                 os.killpg(state["proc"].pid, signal.SIGKILL)
@@ -172,6 +172,17 @@ def main():
         start_orchestrator(args, tmp, port, state)
         for i in range(args.iterations):
             step(port, case, "ok", user, f"ok-{i}" + (" cold" if i == 0 else ""), 200)
+        # check that if we switch to a failing function handler for the same client,
+        # then we truly execute that handler.
+        # if we execute the old handler, we would get 200, but we expect 500.
+        step(port, case, "switch", user, "handler-switch-new-client", 500, max_s=case["timeout"] / 2)
+        step(port, case, "ok", user, "ok-after-switch", 200)
+        before = group_leaks(state["proc"].pid)
+        # verify that if we send wrong but different config, system will not spawn
+        # new executor/manager process, but will reject the request
+        step(port, case, "badpath", user, "inconsistent-config-rejected", 400, max_s=5)
+        if group_leaks(state["proc"].pid) != before:
+            raise Fail("inconsistent-config-rejected: a new executor/manager process was spawned")
         step(port, case, "fail", user, "error", 500)
         step(port, case, "fail", user, "fail-repeat-same-client", 500, max_s=case["timeout"] / 2)
         step(port, case, "ok", user, "ok-after-error", 200)
