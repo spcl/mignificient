@@ -133,3 +133,9 @@ configure_file(
   ${CMAKE_SOURCE_DIR}/config/invoker.json.in
   ${CMAKE_BINARY_DIR}/config/invoker.json
 )
+
+option(BUILD_INTEGRATION_TESTS "Register GPU integration tests (tests/integration)" ON)
+if(BUILD_INTEGRATION_TESTS)
+  enable_testing()
+  add_subdirectory(tests/integration)
+endif()
