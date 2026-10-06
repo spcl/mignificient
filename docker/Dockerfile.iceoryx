@@ -1,4 +1,5 @@
-FROM spcleth/mignificient:base AS iceoryx-builder
+ARG BASE_IMAGE=spcleth/mignificient:base
+FROM ${BASE_IMAGE} AS iceoryx-builder
 
 RUN apt-get update && apt-get install -y \
     libacl1-dev \
@@ -18,9 +19,12 @@ RUN git clone https://github.com/eclipse-iceoryx/iceoryx.git /src/iceoryx \
     && cmake --build build -j$(nproc) \
     && cmake --install build
 
-# Build iceoryx2 from source
+# Build iceoryx2 from source.
+# This version MUST match the host build's iceoryx2 (CMake MIGNIFICIENT_ICEORYX2_VERSION once the
+# integration-tests branch is merged; v0.8.1 today). Host and container talk over shared memory.
+ARG ICEORYX2_VERSION=v0.8.1
 RUN apt-get update && apt-get install -y clang libclang-dev && rm -rf /var/lib/apt/lists/*
-RUN . $HOME/.bashrc && git clone https://github.com/eclipse-iceoryx/iceoryx2.git /src/iceoryx2 \
+RUN . $HOME/.bashrc && git clone --branch "$ICEORYX2_VERSION" --depth 1 https://github.com/eclipse-iceoryx/iceoryx2.git /src/iceoryx2 \
     && cd /src/iceoryx2 \
     && cmake -B build -S . \
       -DCMAKE_INSTALL_PREFIX=/opt/iceoryx2 \
@@ -29,7 +33,7 @@ RUN . $HOME/.bashrc && git clone https://github.com/eclipse-iceoryx/iceoryx2.git
     && cmake --build build -j$(nproc) \
     && cmake --install build
 
-FROM spcleth/mignificient:base
+FROM ${BASE_IMAGE}
 
 COPY --from=iceoryx-builder /opt/iceoryx /opt/iceoryx
 COPY --from=iceoryx-builder /opt/iceoryx2 /opt/iceoryx2
