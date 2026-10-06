@@ -117,6 +117,15 @@ namespace mignificient { namespace orchestrator {
       _http_callback(resp);
     }
 
+    void respond_bad_request(const std::string& msg)
+    {
+      auto resp = drogon::HttpResponse::newHttpResponse();
+      resp->setStatusCode(drogon::k400BadRequest);
+      resp->setContentTypeCode(drogon::CT_APPLICATION_JSON);
+      resp->setBody(fmt::format("{{\"result\": null, \"error\": \"{}\"}}", msg));
+      _http_callback(resp);
+    }
+
     void set_swap_in_stats(const executor::SwapResult& stats)
     {
       _swap_in_stats = stats;

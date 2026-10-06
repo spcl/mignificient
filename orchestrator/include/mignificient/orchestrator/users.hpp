@@ -10,7 +10,6 @@
 #include <mignificient/orchestrator/event.hpp>
 #include <mignificient/orchestrator/executor.hpp>
 #include <mignificient/orchestrator/invocation.hpp>
-#include <stdexcept>
 
 namespace mignificient { namespace orchestrator {
 
@@ -29,6 +28,7 @@ namespace mignificient { namespace orchestrator {
     {
       const std::string& username = invocation->user();
       const std::string& fname = invocation->function_name();
+      const std::string& fhandler = invocation->function_handler();
       float required_memory = invocation->gpu_memory();
 
       Client* selected_client = nullptr;
@@ -57,14 +57,23 @@ namespace mignificient { namespace orchestrator {
 
       if (it != _gpu_clients.end()) {
         for (auto& client : it->second) {
-          if (client->fname() == fname) {
+          // Client identity = function name + handler
+          if (client->fname() == fname && client->handler() == fhandler) {
 
-            selected_gpu = client->gpu_instance();
+            if (client->function_path() != invocation->function_path() || client->language() != invocation->language()) {
+              spdlog::error("Rejected invocation for function {} handler {}: different function-path/language", fname, fhandler);
+              invocation->respond_bad_request(fmt::format(
+                "function '{}' (handler '{}') is already registered with a different function-path/language", fname, fhandler));
+              return std::make_tuple(nullptr, false);
+            }
 
-            if (!client->is_busy() && !client->is_lukewarm() && !selected_gpu->is_busy()) {
+            GPUInstance* client_gpu = client->gpu_instance();
+
+            if (!client->is_busy() && !client->is_lukewarm() && !client_gpu->is_busy()) {
               // Variant (A) - we have an idle container on idle GPU
               spdlog::info("Using an existing client {} for user {}", client->id(), username);
               selected_client = client.get();
+              selected_gpu = client_gpu;
               fully_idle = true;
               break;
             } else if (client->is_lukewarm() && !lukewarm_client) {
@@ -72,16 +81,16 @@ namespace mignificient { namespace orchestrator {
               lukewarm_client = client.get();
             } else {
 
-              if (selected_gpu->pending_invocations() < min_pending) {
+              if (client_gpu->pending_invocations() < min_pending) {
                 // Variant (B) - we have an busy container/GPU, found minimal
                 selected_client = client.get();
-                min_pending = selected_gpu->pending_invocations();
+                selected_gpu = client_gpu;
+                min_pending = client_gpu->pending_invocations();
               }
 
             }
           }
         }
-        ++it;
       }
 
       // Variant (A') - prefer lukewarm over allocating new cold container
@@ -261,6 +270,7 @@ namespace mignificient { namespace orchestrator {
 
       _gpu_clients[username].push_back(std::make_unique<Client>(_ipc_config.backend, client_id, fname, executor_buf, gpuless_buf));
       auto selected_client = _gpu_clients[username].back().get();
+      selected_client->set_function_config(fhandler, invocation->function_path(), invocation->language());
 
       SPDLOG_DEBUG("Allocate a new client {} for user {}", client_id, username);
 
