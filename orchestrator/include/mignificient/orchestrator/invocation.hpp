@@ -2,15 +2,19 @@
 #define __MIGNIFICIENT_ORCHESTRATOR_INVOCATION_HPP__
 
 #include <chrono>
+#include <fstream>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include <drogon/HttpResponse.h>
 #include <drogon/HttpTypes.h>
 #include <spdlog/spdlog.h>
 
 #include <mignificient/executor/executor.hpp>
+#include <mignificient/orchestrator/package.hpp>
 
 namespace mignificient { namespace orchestrator {
 
@@ -24,48 +28,94 @@ namespace mignificient { namespace orchestrator {
 
     static std::unique_ptr<ActiveInvocation> create(
       std::function<void(const drogon::HttpResponsePtr&)> http_callback,
-      std::string payload
+      std::string payload,
+      const std::vector<std::string>& package_roots
     )
     {
       // Parse input data
       Json::Value input_data;
       Json::Reader reader;
       if (!reader.parse(payload, input_data)) {
-        auto resp = drogon::HttpResponse::newHttpResponse();
-        resp->setStatusCode(drogon::k400BadRequest);
-        resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
-        resp->setBody("Couldn't parse the input data");
-
-        http_callback(resp);
+        bad_request(http_callback, "Couldn't parse the input data");
         return nullptr;
       }
 
       for(const auto& field : {"function", "user", "uuid", "modules", "mig-instance", "gpu-memory", "timeout"}) {
         if (!input_data.isMember(field)) {
-
-          auto resp = drogon::HttpResponse::newHttpResponse();
-          resp->setStatusCode(drogon::k400BadRequest);
-          resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
-          resp->setBody(fmt::format("Missing key {}", field));
-
-          http_callback(resp);
+          bad_request(http_callback, fmt::format("Missing key {}", field));
           return nullptr;
         }
       }
 
       try {
+        if(auto error = validate(input_data, package_roots)) {
+          bad_request(http_callback, *error);
+          return nullptr;
+        }
         return std::make_unique<ActiveInvocation>(http_callback, input_data);
       } catch (...) {
-
-        auto resp = drogon::HttpResponse::newHttpResponse();
-        resp->setStatusCode(drogon::k400BadRequest);
-        resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
-        resp->setBody("Parsing error");
-
-        http_callback(resp);
-
+        bad_request(http_callback, "Parsing error");
         return nullptr;
       }
+    }
+
+    static void bad_request(const std::function<void(const drogon::HttpResponsePtr&)>& http_callback, const std::string& reason)
+    {
+      auto resp = drogon::HttpResponse::newHttpResponse();
+      resp->setStatusCode(drogon::k400BadRequest);
+      resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
+      resp->setBody(reason);
+      http_callback(resp);
+    }
+
+    /**
+     * Checks "executor" and "code-package". On success, "code-package" is replaced
+     * by its canonical path. Returns the error message otherwise.
+     */
+    static std::optional<std::string> validate(Json::Value& input_data, const std::vector<std::string>& package_roots)
+    {
+      if(input_data.isMember("executor")) {
+        auto executor = input_data["executor"].asString();
+        if(executor != "bare-metal" && executor != "container") {
+          return fmt::format("Invalid executor '{}', expected 'bare-metal' or 'container'", executor);
+        }
+      }
+
+      if(input_data["code-package"].isNull()) {
+        return std::nullopt;
+      }
+
+      if(package_roots.empty()) {
+        return "code-package rejected: no package-roots configured";
+      }
+
+      auto requested = input_data["code-package"].asString();
+      auto pkg = resolve_package(package_roots, requested);
+      if(!pkg) {
+        return fmt::format("code-package '{}' is not a package (absolute path to a directory with package.json) under the package roots", requested);
+      }
+
+      Json::Value meta;
+      std::ifstream meta_file{*pkg + "/package.json"};
+      if(!Json::Reader{}.parse(meta_file, meta) || !meta.isObject()) {
+        return fmt::format("Couldn't parse {}/package.json", *pkg);
+      }
+
+      auto language = input_data["function-language"].asString();
+      if(language != meta["language"].asString()) {
+        return fmt::format("function-language '{}' does not match the package language '{}'", language, meta["language"].asString());
+      }
+
+      for(const char* field : {"function-path", "cuda-binary", "cubin-analysis"}) {
+        auto path = input_data[field].asString();
+        bool required = std::string_view{field} == "function-path";
+        if((required || !path.empty()) && !path_under(*pkg, path)) {
+          return fmt::format("{} '{}' is not inside code-package '{}'", field, path, *pkg);
+        }
+      }
+
+      input_data["code-package"] = *pkg;
+      return std::nullopt;
     }
 
     ActiveInvocation(
@@ -94,6 +144,7 @@ namespace mignificient { namespace orchestrator {
       //_cuda_binary = input_data["cuda-binary"].asString();
       _ld_preload = !input_data["ld-preload"].isNull() ? input_data["ld-preload"].asString() : std::optional<std::string>{};
       _code_package = !input_data["code-package"].isNull() ? input_data["code-package"].asString() : std::optional<std::string>{};
+      _executor = input_data.isMember("executor") ? input_data["executor"].asString() : std::optional<std::string>{};
 
       int i = 0;
       for(Json::Value& module : input_data["modules"]) {
@@ -193,6 +244,12 @@ namespace mignificient { namespace orchestrator {
       return _code_package;
     }
 
+    // "bare-metal" or "container"; only used when a new client is created.
+    const std::optional<std::string>& executor() const
+    {
+      return _executor;
+    }
+
     // FIXME: remove
     const std::string& cuda_binary() const
     {
@@ -270,6 +327,7 @@ namespace mignificient { namespace orchestrator {
 
     std::optional<std::string> _ld_preload;
     std::optional<std::string> _code_package;
+    std::optional<std::string> _executor;
     std::string _input_payload;
     std::string _function_name;
     std::string _function_handler;

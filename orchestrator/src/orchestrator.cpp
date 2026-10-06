@@ -290,6 +290,11 @@ namespace mignificient { namespace orchestrator {
 
     auto http_config = config["http"];
 
+    std::vector<std::string> package_roots;
+    for(const auto& root : config["executor"]["package-roots"]) {
+      package_roots.push_back(root.asString());
+    }
+
     if (_ipc_config.backend == ipc::IPCBackend::ICEORYX_V1) {
 
       _waitset.emplace();
@@ -301,7 +306,7 @@ namespace mignificient { namespace orchestrator {
       _http_trigger_v1.emplace();
       _http_trigger_v1->register_trigger(*_waitset, iox::popo::createNotificationCallback(Orchestrator::_handle_http_v1, *this));
 
-      _http_server = std::make_shared<HTTPServer>(http_config, _http_trigger_v1.value());
+      _http_server = std::make_shared<HTTPServer>(http_config, _http_trigger_v1.value(), package_roots);
     }
 #ifdef MIGNIFICIENT_WITH_ICEORYX2
     else if (_ipc_config.backend == ipc::IPCBackend::ICEORYX_V2) {
@@ -318,7 +323,7 @@ namespace mignificient { namespace orchestrator {
       _http_trigger_v2.emplace();
       _http_trigger_v2->register_trigger(_waitset_v2.value());
 
-      _http_server = std::make_shared<HTTPServer>(http_config, _http_trigger_v2.value());
+      _http_server = std::make_shared<HTTPServer>(http_config, _http_trigger_v2.value(), package_roots);
     }
 #endif
     else {

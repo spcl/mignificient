@@ -202,7 +202,7 @@ namespace mignificient { namespace orchestrator {
       void swap_off(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback);
       void swap_in(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback);
 
-      HTTPServer(Json::Value & config, HTTPTrigger& trigger);
+      HTTPServer(Json::Value & config, HTTPTrigger& trigger, std::vector<std::string> package_roots);
       void run();
       void shutdown();
       void wait();
@@ -210,6 +210,7 @@ namespace mignificient { namespace orchestrator {
   private:
 
       HTTPTrigger& _trigger;
+      std::vector<std::string> _package_roots;
 
       std::thread _server_thread;
   };

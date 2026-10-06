@@ -11,7 +11,7 @@ namespace mignificient { namespace orchestrator {
     auto body = req->getBody();
     std::string input(body.data(), body.length());
 
-    auto invoc = ActiveInvocation::create(callback, input);
+    auto invoc = ActiveInvocation::create(callback, input, _package_roots);
     if(invoc) {
       _trigger.trigger(std::move(invoc));
     }
@@ -117,8 +117,9 @@ namespace mignificient { namespace orchestrator {
     _trigger.trigger_admin(std::move(admin_req));
   }
 
-  HTTPServer::HTTPServer(Json::Value & config, HTTPTrigger& trigger):
-    _trigger(trigger)
+  HTTPServer::HTTPServer(Json::Value & config, HTTPTrigger& trigger, std::vector<std::string> package_roots):
+    _trigger(trigger),
+    _package_roots(std::move(package_roots))
   {
     drogon::app().addListener("0.0.0.0", config["port"].asInt());
     spdlog::info("Listening on port {}", config["port"].asInt());

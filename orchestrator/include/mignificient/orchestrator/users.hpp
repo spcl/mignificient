@@ -98,6 +98,7 @@ namespace mignificient { namespace orchestrator {
         spdlog::info("Using lukewarm client {} for user {}, triggering swap-in", lukewarm_client->id(), username);
         selected_client = lukewarm_client;
         selected_gpu = lukewarm_client->gpu_instance();
+        log_ignored_executor(*invocation, selected_client);
 
         auto* invoc_ptr = invocation.get();
         // Store the invocation for later
@@ -156,6 +157,10 @@ namespace mignificient { namespace orchestrator {
 
         }
 
+      }
+
+      if(!new_client_created) {
+        log_ignored_executor(*invocation, selected_client);
       }
 
       // Add invocation to the selected client/GPU
@@ -255,6 +260,13 @@ namespace mignificient { namespace orchestrator {
 
   private:
 
+    static void log_ignored_executor(const ActiveInvocation& invocation, const Client* client)
+    {
+      if(invocation.executor()) {
+        spdlog::info("Warm client {}: ignoring requested executor '{}'", client->id(), *invocation.executor());
+      }
+    }
+
     Client* allocate(const std::string& username, const std::string& fname, ActiveInvocation* invocation, GPUInstance* selected_gpu)
     {
       // Create a new client with configured buffer sizes
@@ -293,7 +305,9 @@ namespace mignificient { namespace orchestrator {
 
       auto spawn_time = std::chrono::high_resolution_clock::now();
 
-      bool use_container = _config["type"].asString() == "container";
+      // The request's "executor" picks the executor kind of a new client; config is the default.
+      bool use_container = invocation->executor().value_or(_config["type"].asString()) == "container";
+      spdlog::info("Allocate client {} with {} executor", client_id, use_container ? "container" : "bare-metal");
 
       // GPUless server always runs bare-metal on the host
       GPUlessServer gpuless_server;
