@@ -9,8 +9,9 @@
 # IOX2_NO_PATCH=1 builds plain upstream v0.8.1 (POSIX shm backend) instead, for comparisons such as
 # benchmarks/iox2-pingpong; use separate src/build/install dirs for it.
 set -eu
-VERSION=v0.8.1
-PATCH="$(cd "$(dirname "$0")" && pwd)/iceoryx2-file-backend.patch"
+DIR="$(cd "$(dirname "$0")" && pwd)"
+VERSION=$(cat "$DIR/iceoryx2-version")
+PATCH="$DIR/iceoryx2-file-backend.patch"
 SRC=$1 BUILD=$2 PREFIX=$3
 
 if [ ! -d "$SRC" ]; then

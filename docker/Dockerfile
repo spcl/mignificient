@@ -31,7 +31,7 @@ RUN cd /opt/mignificient/src \
       -DBUILD_ICEORYX2=ON \
       -DCUDNN_DIR=/opt/cudnn-8.9.7 \
       -DCMAKE_CUDA_ARCHITECTURES=80 \
-      -DCMAKE_PREFIX_PATH="/opt/iceoryx;/opt/iceoryx2" \
+      -DCMAKE_PREFIX_PATH="/opt/iceoryx" -DMIGNIFICIENT_ICEORYX2_INSTALL=/opt/iceoryx2 \
     && cmake --build /opt/mignificient/build -j$(nproc) --target executor_cpp gpuless _mignificient
 
 # CUDA stub for libcuda.so.1 (we do not mount a GPU into the container).

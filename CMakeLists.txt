@@ -2,8 +2,9 @@ cmake_minimum_required(VERSION 3.17)
 include(FetchContent)
 project(mignificient)
 
-# Single source of truth for the iceoryx2 version (also read by the Docker image).
-set(MIGNIFICIENT_ICEORYX2_VERSION v0.8.1)
+# Single source of truth for the iceoryx2 version: external/iceoryx2-version (also read by
+# external/iceoryx2-build.sh, which builds the Docker image's iceoryx2).
+file(STRINGS ${CMAKE_SOURCE_DIR}/external/iceoryx2-version MIGNIFICIENT_ICEORYX2_VERSION LIMIT_COUNT 1)
 
 set(EXTERNAL_INSTALL_LOCATION ${CMAKE_BINARY_DIR}/external)
 
@@ -92,16 +93,32 @@ if(BUILD_ICEORYX2)
   # Add compile definition for all targets
   add_compile_definitions(MIGNIFICIENT_WITH_ICEORYX2)
 
-  message(STATUS "Fetching iceoryx2 ${MIGNIFICIENT_ICEORYX2_VERSION}")
-  set(BUILD_CXX ON CACHE INTERNAL "")
-  set(BUILD_EXAMPLES OFF CACHE INTERNAL "")
-  set(BUILD_TESTING OFF CACHE INTERNAL "")
-  FetchContent_Declare(iceoryx2
-    GIT_REPOSITORY https://github.com/eclipse-iceoryx/iceoryx2.git
-    GIT_TAG ${MIGNIFICIENT_ICEORYX2_VERSION}
-    UPDATE_DISCONNECTED 1
-  )
-  FetchContent_MakeAvailable(iceoryx2)
+  # Always the file-backed build (external/iceoryx2-file-backend.patch): per-client iceoryx2 directories
+  # need it, and an unpatched process never finds the services of a patched one.
+  set(MIGNIFICIENT_ICEORYX2_INSTALL "" CACHE PATH
+    "Prefix of an iceoryx2 install from external/iceoryx2-build.sh (patched); empty: fetch and build it")
+  if(MIGNIFICIENT_ICEORYX2_INSTALL)
+    # Only there: an unpatched iceoryx2 found elsewhere would break the per-client directories.
+    # iceoryx2-cxx's config pulls in its siblings with find_dependency; finding them here first pins them too.
+    foreach(pkg iceoryx2-cmake-modules iceoryx2-bb-cxx iceoryx2-c iceoryx2-cxx)
+      find_package(${pkg} REQUIRED PATHS ${MIGNIFICIENT_ICEORYX2_INSTALL} NO_DEFAULT_PATH)
+    endforeach()
+    message(STATUS "Using iceoryx2 from ${MIGNIFICIENT_ICEORYX2_INSTALL}")
+  else()
+    message(STATUS "Fetching iceoryx2 ${MIGNIFICIENT_ICEORYX2_VERSION} (file-backend patch)")
+    set(BUILD_CXX ON CACHE INTERNAL "")
+    set(BUILD_EXAMPLES OFF CACHE INTERNAL "")
+    set(BUILD_TESTING OFF CACHE INTERNAL "")
+    set(IOX2_PATCH ${CMAKE_SOURCE_DIR}/external/iceoryx2-file-backend.patch)
+    FetchContent_Declare(iceoryx2
+      GIT_REPOSITORY https://github.com/eclipse-iceoryx/iceoryx2.git
+      GIT_TAG ${MIGNIFICIENT_ICEORYX2_VERSION}
+      UPDATE_DISCONNECTED 1
+      # Applied once; re-running on the patched tree is a no-op.
+      PATCH_COMMAND sh -c "git apply --reverse --check ${IOX2_PATCH} 2>/dev/null || git apply ${IOX2_PATCH}"
+    )
+    FetchContent_MakeAvailable(iceoryx2)
+  endif()
 else()
   message(STATUS "Building with iceoryx1 only (BUILD_ICEORYX2=OFF)")
 endif()
