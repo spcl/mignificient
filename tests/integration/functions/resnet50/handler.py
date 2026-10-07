@@ -32,3 +32,18 @@ def handler(obj):
     writer = mignificient.BufferStringWriter(obj.result)
     writer.write(json.dumps({"result": top_catid[0].item(), "probability": top_prob[0].item()}))
     return writer.buffer.size
+
+
+# Variants for the integration test (tests/integration/cases/resnet50.json).
+def handler_fail(obj):
+    raise RuntimeError("intentional failure (integration test)")
+
+
+def handler_hang(obj):
+    import time
+    time.sleep(json.loads(bytes(obj.payload.view_readable()) or b"{}").get("sleep-s", 0))
+    return handler(obj)
+
+
+def handler_none(obj):  # forgets to return the result size: an empty result, not a dead executor
+    handler(obj)

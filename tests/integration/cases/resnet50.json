@@ -1,0 +1,14 @@
+{
+  "language": "python",
+  "function-path": "@BUILD@/test-packages/resnet50/handler.py",
+  "code-package": "@BUILD@/test-packages/resnet50",
+  "ok":   {"function": "resnet", "function-handler": "handler", "expect": {"result": 258}},
+  "fail": {"function": "resnet_fail", "function-handler": "handler_fail"},
+  "hang": {"function": "resnet_hang", "function-handler": "handler_hang", "payload": {"sleep-s": 30}, "timeout": 8,
+           "restart-payload": {"sleep-s": 0}},
+  "switch": {"function": "resnet", "function-handler": "handler_fail"},
+  "badpath": {"function": "resnet", "function-handler": "handler", "function-path": "/nonexistent/handler.py"},
+  "none": {"function": "resnet_none", "function-handler": "handler_none"},
+  "timeout": 60,
+  "gpu-memory": 2048
+}

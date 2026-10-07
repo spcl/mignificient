@@ -34,15 +34,18 @@ def start_orchestrator(args, tmp, port, state):
         cfg = json.load(f)
     cfg["http"]["port"] = port
     cfg["executor"]["type"] = args.executor
+    cfg["executor"]["package-roots"] = [os.path.join(args.build, "test-packages")]
     cfg["ipc"]["backend"] = args.signal  # ponytail: futex will need its own key once it exists
     cfg["timeout-check-interval-ms"] = 100
     cfg_path = os.path.join(tmp, "orchestrator.json")
     with open(cfg_path, "w") as f:
         json.dump(cfg, f, indent=2)
     log = open(os.path.join(tmp, "orchestrator.log"), "w")
+    # MIGNIFICIENT_TEST_ID labels our containers, so teardown finds exactly ours.
     proc = subprocess.Popen([os.path.join(args.build, "orchestrator", "orchestrator"), cfg_path,
                              device_db(args.build)],
-                            cwd=tmp, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+                            cwd=tmp, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+                            env=dict(os.environ, MIGNIFICIENT_TEST_ID=state["test_id"]))
     state["proc"] = proc  # register at once so teardown/watchdog see it during startup
     t0 = time.time()
     while time.time() - t0 < 30:
@@ -66,6 +69,8 @@ def request(port, case, block, user, payload=None):
         "mig-instance": "7g", "gpu-memory": case["gpu-memory"],
         "timeout": spec.get("timeout", case["timeout"]),
         "input-payload": json.dumps(spec.get("payload", {}) if payload is None else payload),
+        "executor": case["executor"], "code-package": case.get("code-package"),
+        "cubin-analysis": "", "cuda-binary": "",  # python packages: the package's own cubin analysis
     }
     req = urllib.request.Request(f"http://127.0.0.1:{port}/invoke", json.dumps(body).encode(),
                                  {"Content-Type": "application/json"})
@@ -105,8 +110,14 @@ def group_leaks(pgid):
     return leaks
 
 
-def teardown(proc):
-    """Returns a list of leak descriptions. Add the docker label check here later."""
+def containers(test_id):
+    out = subprocess.run(["docker", "ps", "-aq", "--filter", f"label=mignificient.test={test_id}"],
+                         capture_output=True, text=True).stdout
+    return out.split()
+
+
+def teardown(proc, test_id):
+    """Returns a list of leak descriptions."""
     pgid = proc.pid
     try:
         os.killpg(pgid, signal.SIGTERM)
@@ -126,6 +137,15 @@ def teardown(proc):
     except ProcessLookupError:
         pass
     proc.wait()
+    # The orchestrator stops its containers on SIGTERM (asynchronously, --rm); anything left is a leak.
+    for _ in range(50):
+        left = containers(test_id)
+        if not left:
+            break
+        time.sleep(0.2)
+    if left:
+        leaks += [f"container {c}" for c in left]
+        subprocess.run(["docker", "rm", "-f", *left], capture_output=True)
     return leaks
 
 
@@ -133,7 +153,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--build", required=True)
     ap.add_argument("--case", required=True)
-    ap.add_argument("--executor", choices=["bare-metal"], required=True)
+    ap.add_argument("--executor", choices=["bare-metal", "container"], required=True)
     ap.add_argument("--signal", choices=["iceoryx2"], required=True)
     ap.add_argument("--iterations", type=int, default=5)
     ap.add_argument("--deadline", type=int, default=600)
@@ -143,10 +163,11 @@ def main():
 
     with open(args.case) as f:
         case = json.loads(f.read().replace("@BUILD@", args.build))
+    case["executor"] = args.executor
     name = os.path.splitext(os.path.basename(args.case))[0]
     tmp = tempfile.mkdtemp(prefix=f"it-{name}-")
     port = free_port()
-    state = {"proc": None}
+    state = {"proc": None, "test_id": f"it-{name}-{args.executor}-{os.getpid()}"}
     failed = False
 
     def watchdog():
@@ -193,6 +214,9 @@ def main():
         step(port, case, "hang", user, "hang-restart-same-client", 200,
              payload=case["hang"].get("restart-payload", {"sleep-s": 0}))
         step(port, case, "ok", user, "ok-after-hang", 200)
+        if "none" in case:  # a handler without a return value: empty result, the client survives
+            step(port, case, "none", user, "returns-none", 200)
+            step(port, case, "none", user, "returns-none-same-client", 200, max_s=case["timeout"] / 2)
     except Fail as e:
         failed = True
         print(f"FAIL: {e}", file=sys.stderr)
@@ -203,7 +227,7 @@ def main():
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
         try:
             if state["proc"]:
-                leaks = teardown(state["proc"])
+                leaks = teardown(state["proc"], state["test_id"])
                 if leaks:
                     failed = True
                     print("FAIL: leaked processes:\n  " + "\n  ".join(leaks), file=sys.stderr)
