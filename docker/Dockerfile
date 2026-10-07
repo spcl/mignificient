@@ -41,7 +41,7 @@ FROM ${RUNTIME_BASE}
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y software-properties-common && \
     add-apt-repository ppa:deadsnakes/ppa && \
-    apt-get update && apt-get install -y --no-install-recommends python3.9 libjsoncpp25 libstdc++6 && \
+    apt-get update && apt-get install -y --no-install-recommends python3.9 libjsoncpp25 libstdc++6 libcurl4 && \
     apt-get purge -y software-properties-common && apt-get autoremove -y && \
     rm -rf /var/lib/apt/lists/*
 
