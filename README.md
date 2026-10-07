@@ -78,9 +78,10 @@ ${REPO_DIR}/tools/list-gpus.sh logs
 
 This will create a file `logs/devices.json` with config used later by orchestrator.
 
-### Start Iceoryx's Roudi
+### Start Iceoryx's Roudi (iceoryx1 backend only)
 
-This step only needs to be done once when starting MIGnificient on a node. In case of issues with iceoryx, kill `iox-roudi` process and start it again.
+Only needed with `"ipc": {"backend": "iceoryx1"}`; the default iceoryx2 backend has no central daemon.
+Start it once per node; in case of issues with iceoryx, kill the `iox-roudi` process and start it again.
 
 ```
 ${REPO_DIR}/tools/start.sh ${BUILD_DIR} logs
@@ -104,6 +105,36 @@ In the output file, you should see something similar to:
 2025-02-03 20:56:04.347 [ Debug ]: Application registered payload data segment 0x1553d4e42000 with size 6293584200 to id 2
 [2025-02-03 20:56:04.348] [info] Listening on port 10000
 ```
+
+### Function packages and containers
+
+A request runs either bare-metal (the default, `executor.type` in the config) or in a container; the first request
+of a client may choose with `"executor": "bare-metal" | "container"`. Containers need a function package, passed as
+`"code-package": "<absolute path>"`, which must lie under one of the config's `executor.package-roots`; the
+request's `function-path` (and `cubin-analysis`, if given) must be inside it. The container mounts the package
+read-only at the same path, plus its own iceoryx2 directory.
+
+Packages are built with `tools/pack_code.py`:
+
+```
+# python: copies the code, creates a conda env (PyTorch 1.12.1, CUDA 11.6), runs prepare.py (e.g. downloads
+# weights into torch-cache/), and writes the cubin analysis gpuless needs for the env's CUDA libraries
+tools/pack_code.py <function dir> python --dest <packages dir> --cubin-analyzer ${BUILD_DIR}/gpuless/cubin_analyzer
+# C++: code and the function's .so
+tools/pack_code.py <function dir> cpp --dest <packages dir> --so libfunction.so
+```
+
+`package.json` in the package records the language, runtime, `torch-home` and `cubin-analysis`; a request without
+`cubin-analysis` uses the package's. See the docstring of `tools/pack_code.py` for details.
+The executor image: `docker build -f docker/Dockerfile.iceoryx -t spcleth/mignificient:iceoryx-local .`, then
+`docker build -f docker/Dockerfile --build-arg ICEORYX_IMAGE=spcleth/mignificient:iceoryx-local -t spcleth/mignificient:executor-local .`
+(`executor.container-executor.image` in the config). Pull or build it on every node before starting the orchestrator.
+
+### Tests
+
+`ctest -L integration --output-on-failure` in the build directory (needs a GPU; the ResNet-50 tests pack a package
+into `<build>/test-packages` once, which needs network and conda). Manual failure scenarios (startup failures, OOM,
+crashed gpuless server, per-client isolation) are in `tests/manual/`.
 
 ### Start invoker
 
