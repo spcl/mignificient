@@ -106,6 +106,7 @@ else()
   message(STATUS "Building with iceoryx1 only (BUILD_ICEORYX2=OFF)")
 endif()
 
+set(FLATBUFFERS_BUILD_TESTS OFF CACHE INTERNAL "")
 add_subdirectory(${CMAKE_SOURCE_DIR}/external/flatbuffers
                  ${EXTERNAL_INSTALL_LOCATION}/flatbuffers-build
                  EXCLUDE_FROM_ALL)
