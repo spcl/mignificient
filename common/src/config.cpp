@@ -99,8 +99,10 @@ namespace mignificient { namespace ipc {
       // ',' would break the container's --mount option.
       if (ipc_config.client_root_base.empty() || ipc_config.client_root_base[0] != '/' ||
           ipc_config.client_root_base.find(',') != std::string::npos ||
-          ipc_config.client_root_base.size() > MAX_CLIENT_ROOT_BASE_LEN) {
-        throw std::runtime_error("ipc.client-root-base must be an absolute path without ',' of at most " +
+          ipc_config.client_root_base.size() > MAX_CLIENT_ROOT_BASE_LEN ||
+          ipc_config.client_root_base == "/" ||
+          ("/" + ipc_config.client_root_base + "/").find("/../") != std::string::npos) {
+        throw std::runtime_error("ipc.client-root-base must be an absolute path other than / without ',' and '..' of at most " +
                                  std::to_string(MAX_CLIENT_ROOT_BASE_LEN) + " characters");
       }
     }

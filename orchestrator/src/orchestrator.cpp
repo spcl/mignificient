@@ -1,7 +1,11 @@
 
 #include <mignificient/orchestrator/orchestrator.hpp>
 
+#include <cerrno>
+#include <cstring>
 #include <filesystem>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include <stdexcept>
 
@@ -31,6 +35,23 @@ namespace mignificient { namespace orchestrator {
   std::shared_ptr<HTTPServer> Orchestrator::_http_server;
   ipc::IPCConfig Orchestrator::_ipc_config;
 
+
+  // Host processes mmap the iceoryx2 files in the client directories, so the base must be a real
+  // directory that only we can write to: no symlink, our uid, mode 0700.
+  static void _prepare_client_root_base(const std::string& base)
+  {
+    std::filesystem::create_directories(std::filesystem::path(base).parent_path());
+    if(mkdir(base.c_str(), 0700) != 0 && errno != EEXIST) {
+      throw std::runtime_error(fmt::format("Cannot create {}: {}", base, strerror(errno)));
+    }
+    struct stat st;
+    if(lstat(base.c_str(), &st) != 0 || !S_ISDIR(st.st_mode) || st.st_uid != geteuid()) {
+      throw std::runtime_error(fmt::format("{} must be a directory (not a symlink) owned by uid {}", base, geteuid()));
+    }
+    if(chmod(base.c_str(), 0700) != 0) {
+      throw std::runtime_error(fmt::format("Cannot chmod 0700 {}: {}", base, strerror(errno)));
+    }
+  }
 
   static void _handle_swap_confirm(int msg, Client* client)
   {
@@ -267,9 +288,7 @@ namespace mignificient { namespace orchestrator {
     else if (_ipc_config.backend == ipc::IPCBackend::ICEORYX_V2) {
       // Each client gets its own node and iceoryx2 directory under this base (see Client).
       const auto& base = _ipc_config.client_root_base;
-      if(std::filesystem::create_directories(base)) {
-        std::filesystem::permissions(base, std::filesystem::perms::owner_all);
-      }
+      _prepare_client_root_base(base);
       spdlog::info("iceoryx2 client directories under {}", base);
     }
 #endif

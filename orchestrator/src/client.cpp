@@ -116,8 +116,11 @@ namespace mignificient { namespace orchestrator {
       spdlog::warn("Removing stale iceoryx2 directory {}", _iox2_root);
       std::filesystem::remove_all(_iox2_root, ec);
     }
+    // Fatal like the node creation right after it: iceoryx2 would otherwise create the directory itself,
+    // with its default permissions.
     if(mkdir(_iox2_root.c_str(), 0700) != 0) {
-      spdlog::error("Failed to create iceoryx2 directory {}: {}", _iox2_root, strerror(errno));
+      spdlog::critical("Failed to create iceoryx2 directory {}: {}", _iox2_root, strerror(errno));
+      abort();
     }
   }
 
