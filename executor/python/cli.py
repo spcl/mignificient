@@ -3,6 +3,7 @@ import importlib.machinery
 import importlib.util
 import operator
 import os
+import sys
 import traceback
 
 import mignificient
@@ -39,6 +40,9 @@ if __name__ == "__main__":
         # orchestrator sends the first invocation.
         if func is None:
 
+            # Like Lambda: the function's directory is importable, so a package can split its code
+            # into modules next to the handler.
+            sys.path.insert(0, os.path.dirname(os.path.abspath(function_file)))
             name = os.path.basename(function_file)
             loader = importlib.machinery.SourceFileLoader(name, function_file)
             spec = importlib.util.spec_from_loader(loader.name, loader)
