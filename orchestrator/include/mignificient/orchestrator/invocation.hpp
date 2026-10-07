@@ -113,6 +113,11 @@ namespace mignificient { namespace orchestrator {
         return fmt::format("function-language '{}' does not match the package language '{}'", language, meta["language"].asString());
       }
 
+      // The package's own cubin analysis (tools/pack_code.py) unless the request names one; checked below.
+      if(input_data["cubin-analysis"].asString().empty() && meta["cubin-analysis"].isString()) {
+        input_data["cubin-analysis"] = *pkg + "/" + meta["cubin-analysis"].asString();
+      }
+
       for(const char* field : {"function-path", "cuda-binary", "cubin-analysis"}) {
         auto path = input_data[field].asString();
         bool required = std::string_view{field} == "function-path";
