@@ -42,6 +42,7 @@
     "cpu-bind-gpuless": false,
     "cpu-bind-gpuless-separate": false,
     "container-runtime": "docker",
+    "startup-timeout-ms": 30000,
     "package-roots": [],
     "bare-metal-executor": {
       "cpp": "${BARE_METAL_EXECUTOR_CPP}",
