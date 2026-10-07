@@ -78,8 +78,6 @@ namespace mignificient { namespace orchestrator {
 
     GPUManager _gpu_manager;
 
-    Users _users;
-
     // iceoryx1: V1 HTTP handler (used as WaitSet callback)
     std::optional<iox::popo::WaitSet<>> _waitset;
     std::optional<HTTPTriggerV1> _http_trigger_v1;
@@ -104,6 +102,9 @@ namespace mignificient { namespace orchestrator {
     void _event_loop_v2();
     void _handle_http_v2();
 #endif
+
+    // Last member, destroyed first: clients hold guards attached to the waitsets above.
+    Users _users;
   };
 
 }}
