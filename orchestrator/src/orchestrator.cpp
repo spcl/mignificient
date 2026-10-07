@@ -281,8 +281,10 @@ namespace mignificient { namespace orchestrator {
   }
 
   Orchestrator::Orchestrator(const Json::Value& config, const std::string& device_db_path):
+    _startup_timeout(config["executor"].get("startup-timeout-ms", 30000).asInt()),
+    _container_worker(config["executor"].get("container-runtime", "docker").asString(), _startup_timeout.count()),
     _gpu_manager(device_db_path, sharing_model(config["sharing-model"].asString())),
-    _users(_gpu_manager, config["executor"], _ipc_config)
+    _users(_gpu_manager, config["executor"], _ipc_config, _container_worker)
   {
     if (config.isMember("timeout-check-interval-ms")) {
       _timeout_check_interval_ms = config["timeout-check-interval-ms"].asInt();
@@ -292,6 +294,10 @@ namespace mignificient { namespace orchestrator {
 
     std::vector<std::string> package_roots;
     for(const auto& root : config["executor"]["package-roots"]) {
+      if(root.asString().empty()) {
+        // "" would make every path relative to it fail, or worse, match unexpectedly.
+        throw std::runtime_error("executor.package-roots: empty entry");
+      }
       package_roots.push_back(root.asString());
     }
 
@@ -394,6 +400,7 @@ namespace mignificient { namespace orchestrator {
 
       _check_timeouts();
       _check_oom();
+      _check_startup();
     }
   }
 
@@ -417,6 +424,7 @@ namespace mignificient { namespace orchestrator {
         if (attachment_id == timeout_check_id) {
           _check_timeouts();
           _check_oom();
+          _check_startup();
           return iox2::CallbackProgression::Continue;
         }
 
@@ -512,19 +520,7 @@ namespace mignificient { namespace orchestrator {
       } else {
         spdlog::info("Admin kill request for client {}", client->id());
 
-#ifdef MIGNIFICIENT_WITH_ICEORYX2
-        if (_ipc_config.backend == ipc::IPCBackend::ICEORYX_V2) {
-          // If we don't remove the mappings, iceoryx2 will complain later.
-          client->uninit_v2();
-          for (auto it = _waitset_mappings_v2.begin(); it != _waitset_mappings_v2.end(); ) {
-            if (std::get<0>(it->second) == client) {
-              it = _waitset_mappings_v2.erase(it);
-            } else {
-              ++it;
-            }
-          }
-        }
-#endif
+        _detach_client(client);
 
         client->timeout_kill();
         _gpu_manager.return_gpu(client->gpu_instance());
@@ -600,20 +596,7 @@ namespace mignificient { namespace orchestrator {
     _users.check_timeouts([this](Client* client) {
       spdlog::error("Timeout for client {}", client->id());
 
-#ifdef MIGNIFICIENT_WITH_ICEORYX2
-      if (_ipc_config.backend == ipc::IPCBackend::ICEORYX_V2) {
-        // Remove waitset mappings for this client before killing
-        client->uninit_v2();
-        // Erase entries from the mapping by finding those pointing to this client
-        for (auto it = _waitset_mappings_v2.begin(); it != _waitset_mappings_v2.end(); ) {
-          if (std::get<0>(it->second) == client) {
-            it = _waitset_mappings_v2.erase(it);
-          } else {
-            ++it;
-          }
-        }
-      }
-#endif
+      _detach_client(client);
 
       client->timeout_kill();
       _gpu_manager.return_gpu(client->gpu_instance());
@@ -625,20 +608,52 @@ namespace mignificient { namespace orchestrator {
     _users.check_oom([this](Client* client) {
       spdlog::error("OOM kill for client {}", client->id());
 
-#ifdef MIGNIFICIENT_WITH_ICEORYX2
-      if (_ipc_config.backend == ipc::IPCBackend::ICEORYX_V2) {
-        client->uninit_v2();
-        for (auto it = _waitset_mappings_v2.begin(); it != _waitset_mappings_v2.end(); ) {
-          if (std::get<0>(it->second) == client) {
-            it = _waitset_mappings_v2.erase(it);
-          } else {
-            ++it;
-          }
-        }
-      }
-#endif
+      _detach_client(client);
 
       client->oom_kill();
+      _gpu_manager.return_gpu(client->gpu_instance());
+    });
+  }
+
+  void Orchestrator::_detach_client(Client* client)
+  {
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+    if (_ipc_config.backend == ipc::IPCBackend::ICEORYX_V2) {
+      // If we don't remove the mappings, iceoryx2 will complain later.
+      client->uninit_v2();
+      for (auto it = _waitset_mappings_v2.begin(); it != _waitset_mappings_v2.end(); ) {
+        if (std::get<0>(it->second) == client) {
+          it = _waitset_mappings_v2.erase(it);
+        } else {
+          ++it;
+        }
+      }
+    }
+#endif
+  }
+
+  void Orchestrator::_check_startup()
+  {
+    for (auto& result : _container_worker.drain()) {
+      Client* client = nullptr;
+      _users.apply_clients([&](Client* c) { if (c->id() == result.client_id) client = c; });
+
+      if (!client) {
+        // Removed meanwhile without cancelling (shouldn't happen); don't leak the container.
+        if (result.container_id) {
+          _container_worker.stop(*result.container_id);
+        }
+      } else if (result.container_id) {
+        client->executor_ptr()->set_container_id(*result.container_id);
+      } else {
+        client->set_startup_error("container start failed: " + result.error);
+      }
+    }
+
+    _users.check_startup(_startup_timeout, [this](Client* client, const std::string& reason) {
+      spdlog::error("Startup failure for client {}: {}", client->id(), reason);
+      _detach_client(client);
+      client->fail_pending(reason);
       _gpu_manager.return_gpu(client->gpu_instance());
     });
   }

@@ -14,6 +14,7 @@
 #include <json/value.h>
 
 #include <mignificient/orchestrator/client.hpp>
+#include <mignificient/orchestrator/container_worker.hpp>
 #include <mignificient/orchestrator/device.hpp>
 #include <mignificient/orchestrator/invocation.hpp>
 #include <mignificient/orchestrator/http.hpp>
@@ -55,6 +56,10 @@ namespace mignificient { namespace orchestrator {
 
     void _check_timeouts();
     void _check_oom();
+    // Drains container starts and tears down clients that failed to start.
+    void _check_startup();
+    // Drops the client's IPC event attachments before it is killed.
+    void _detach_client(Client* client);
     void _handle_admin_request(AdminRequest&& req);
 
     std::unordered_map<int, Client> clients;
@@ -73,6 +78,10 @@ namespace mignificient { namespace orchestrator {
     std::unordered_map<int, Context> _client_contexts;
     std::unordered_map<int, Context> _server_contexts;
     Context _http_context;
+
+    // executor.startup-timeout-ms: executor and gpuless server must register within it.
+    std::chrono::milliseconds _startup_timeout;
+    ContainerWorker _container_worker;
 
     GPUManager _gpu_manager;
 

@@ -16,6 +16,7 @@
 #include <json/value.h>
 
 #include <mignificient/ipc/config.hpp>
+#include <mignificient/orchestrator/container_worker.hpp>
 
 extern "C" char **environ;
 
@@ -46,6 +47,16 @@ namespace mignificient { namespace orchestrator {
     bool start(const ipc::IPCConfig& ipc_config, const std::string& user_id, GPUInstance& instance, bool poll_sleep, bool use_vmm, const Json::Value& config, float max_memory, int cpu_idx = -1);
 
     pid_t pid() const { return _pid; }
+
+    // Reaps the server if it has exited; the pid is then forgotten, so it's never signalled.
+    bool exited()
+    {
+      if(_pid > 0 && waitpid(_pid, nullptr, WNOHANG) == _pid) {
+        _pid = -1;
+        return true;
+      }
+      return false;
+    }
 
   private:
     pid_t _pid = -1;
@@ -120,14 +131,42 @@ namespace mignificient { namespace orchestrator {
 
       virtual ~Executor() = default;
 
-      virtual void stop()
+      void stop()
       {
+        if(_worker) {
+          // Container: the worker kills it, or cancels a start that hasn't finished.
+          if(!_container_id.empty()) {
+            _worker->stop(std::exchange(_container_id, ""));
+          } else {
+            _worker->cancel(_user);
+          }
+        }
         // Never signal pid <= 0: kill(0) / kill(-1) hit our own process group / every process.
-        if(_pid > 0) {
+        else if(_pid > 0) {
           kill(_pid, SIGKILL);
           waitpid(_pid, nullptr, 0);
           _pid = -1;
         }
+      }
+
+      // Bare metal: reaps the process if it has exited. Containers report exits through the worker.
+      bool exited()
+      {
+        if(_pid > 0 && waitpid(_pid, nullptr, WNOHANG) == _pid) {
+          _pid = -1;
+          return true;
+        }
+        return false;
+      }
+
+      bool is_container() const
+      {
+        return _worker != nullptr;
+      }
+
+      void set_container_id(const std::string& id)
+      {
+        _container_id = id;
       }
 
       const std::optional<std::string>& ld_preload() const
@@ -163,6 +202,9 @@ namespace mignificient { namespace orchestrator {
       std::string _function;
       std::string _function_handler;
       GPUInstance& _device;
+      // Set for container executors; `_user` is the client id.
+      ContainerWorker* _worker = nullptr;
+      std::string _container_id;
   };
 
   class BareMetalExecutorCpp : public Executor {
@@ -264,6 +306,7 @@ namespace mignificient { namespace orchestrator {
         const Json::Value& config,
         const std::optional<std::string>& ld_preload,
         const std::optional<std::string>& code_package,
+        ContainerWorker& worker,
         const std::string& container_runtime = "docker"
     ):
       Executor(ipc_config, user_id, function, function_handler, gpu_memory, device, ld_preload),
@@ -273,10 +316,12 @@ namespace mignificient { namespace orchestrator {
       _image(config["image"].asString()),
       _code_package(code_package),
       _container_runtime(container_runtime)
-    {}
+    {
+      _worker = &worker;
+    }
 
+    // Queues `<runtime> run` on the worker; the container id arrives through drain().
     bool start(bool poll_sleep, int cpu_idx = -1);
-    void stop() override;
 
   private:
     std::string _cpp_executor;
@@ -285,7 +330,6 @@ namespace mignificient { namespace orchestrator {
     std::string _image;
     std::optional<std::string> _code_package;
     std::string _container_runtime;
-    std::string _container_id;
   };
 
   class DockerContainerExecutorPython : public ExecutorPython {
@@ -303,6 +347,7 @@ namespace mignificient { namespace orchestrator {
         const Json::Value& config,
         const std::optional<std::string>& ld_preload,
         const std::optional<std::string>& code_package,
+        ContainerWorker& worker,
         const std::string& container_runtime = "docker"
     ):
       ExecutorPython(
@@ -311,15 +356,16 @@ namespace mignificient { namespace orchestrator {
       ),
       _image(config["image"].asString()),
       _container_runtime(container_runtime)
-    {}
+    {
+      _worker = &worker;
+    }
 
+    // Queues `<runtime> run` on the worker; the container id arrives through drain().
     bool start(bool poll_sleep, int cpu_idx = -1);
-    void stop() override;
 
   private:
     std::string _image;
     std::string _container_runtime;
-    std::string _container_id;
   };
 
 }}

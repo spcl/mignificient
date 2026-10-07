@@ -82,6 +82,9 @@ namespace mignificient { namespace orchestrator {
       }
 
       if(input_data["code-package"].isNull()) {
+        if(input_data["executor"].asString() == "container") {
+          return "executor 'container' requires a code-package: host function paths are not visible in the container";
+        }
         return std::nullopt;
       }
 
@@ -93,6 +96,10 @@ namespace mignificient { namespace orchestrator {
       auto pkg = resolve_package(package_roots, requested);
       if(!pkg) {
         return fmt::format("code-package '{}' is not a package (absolute path to a directory with package.json) under the package roots", requested);
+      }
+      // Containers mount it with --mount, whose options are separated by ','.
+      if(pkg->find(',') != std::string::npos) {
+        return fmt::format("code-package '{}' contains ',', which cannot be mounted into a container", *pkg);
       }
 
       Json::Value meta;
@@ -163,8 +170,12 @@ namespace mignificient { namespace orchestrator {
       resp->setStatusCode(drogon::k503ServiceUnavailable);
       resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
 
-      resp->setBody(reason);
-      resp->setBody(fmt::format("{{\"result\": null, \"error\": \"{}\"}}", reason));
+      Json::Value body;
+      body["result"] = Json::nullValue;
+      body["error"] = reason;
+      Json::StreamWriterBuilder writer;
+      writer["indentation"] = "";
+      resp->setBody(Json::writeString(writer, body));
 
       _http_callback(resp);
     }

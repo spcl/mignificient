@@ -289,21 +289,12 @@ namespace mignificient { namespace orchestrator {
   // iceoryx2's default root; bind-mounted at the same path into executor containers.
   static constexpr const char* ICEORYX2_ROOT = "/tmp/iceoryx2";
 
-  static std::string _shell_quote(const std::string& arg)
-  {
-    std::string out = "'";
-    for(char c : arg) {
-      out += (c == '\'') ? std::string{"'\\''"} : std::string(1, c);
-    }
-    return out + "'";
-  }
-
   /**
    * `<runtime> run -d --rm --user <uid>:<gid> [-v <pkg>:<pkg>:ro] <ipc mounts> [--label] -e ... <image> <argv>`
    * The code package is mounted read-only at its host path, so host paths stay valid inside.
-   * Returns the container id, or "" on failure.
+   * The ContainerWorker runs it.
    */
-  static std::string _start_container(
+  static std::vector<std::string> _container_argv(
     const std::string& container_runtime,
     const std::string& image,
     const std::optional<std::string>& code_package,
@@ -333,8 +324,9 @@ namespace mignificient { namespace orchestrator {
     }();
     args.insert(args.end(), {"--sysctl", fmt::format("net.unix.max_dgram_qlen={}", dgram_qlen)});
 
+    // --mount, not -v: ':' in the path is fine, and a missing source fails the start instead of being created.
     if(code_package.has_value()) {
-      args.insert(args.end(), {"-v", fmt::format("{0}:{0}:ro", code_package.value())});
+      args.insert(args.end(), {"--mount", fmt::format("type=bind,source={0},target={0},readonly", code_package.value())});
     }
 
     args.insert(args.end(), {"--mount", "type=bind,source=/dev/shm,target=/dev/shm"});
@@ -357,33 +349,7 @@ namespace mignificient { namespace orchestrator {
     args.push_back(image);
     args.insert(args.end(), cmd.begin(), cmd.end());
 
-    std::string command;
-    for(const auto& arg : args) {
-      command += (command.empty() ? "" : " ") + _shell_quote(arg);
-    }
-
-    spdlog::info("Starting container executor: {}", command);
-
-    std::array<char, 128> buffer;
-    std::string result;
-    FILE* pipe = popen(command.c_str(), "r");
-    if(!pipe) {
-      spdlog::error("Failed to run container command: {}", command);
-      return "";
-    }
-    while(fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
-      result += buffer.data();
-    }
-    int status = pclose(pipe);
-    if(status != 0) {
-      spdlog::error("Container command failed with status {}: {}", status, command);
-      return "";
-    }
-    // Trim trailing whitespace/newline
-    while(!result.empty() && (result.back() == '\n' || result.back() == '\r' || result.back() == ' ')) {
-      result.pop_back();
-    }
-    return result;
+    return args;
   }
 
   bool DockerContainerExecutorCpp::start(bool poll_sleep, int cpu_idx)
@@ -418,54 +384,16 @@ namespace mignificient { namespace orchestrator {
       env_vars.emplace_back("CPU_BIND_IDX", std::to_string(cpu_idx));
     }
 
-    _container_id = _start_container(_container_runtime, _image, _code_package, env_vars, {_cpp_executor});
-    if(_container_id.empty()) {
-      spdlog::error("Failed to start container for user {}", _user);
-      return false;
-    }
-
-    spdlog::info("Container started with ID: {} for user {}", _container_id, _user);
+    _worker->start(_user, _container_argv(_container_runtime, _image, _code_package, env_vars, {_cpp_executor}));
     return true;
-  }
-
-  void DockerContainerExecutorCpp::stop()
-  {
-    if(!_container_id.empty()) {
-      std::string command = fmt::format("{} kill {}", _container_runtime, _container_id);
-      spdlog::info("Stopping container: {}", command);
-      int ret = system(command.c_str());
-      if(ret != 0) {
-        spdlog::warn("Failed to kill container {}", _container_id);
-      }
-      _container_id.clear();
-    }
   }
 
   bool DockerContainerExecutorPython::start(bool poll_sleep, int cpu_idx)
   {
     LaunchSpec spec = python_launch(poll_sleep, cpu_idx);
 
-    _container_id = _start_container(_container_runtime, _image, _code_package, spec.env, spec.argv);
-    if(_container_id.empty()) {
-      spdlog::error("Failed to start Python container for user {}", _user);
-      return false;
-    }
-
-    spdlog::info("Container started with ID: {} for user {}", _container_id, _user);
+    _worker->start(_user, _container_argv(_container_runtime, _image, _code_package, spec.env, spec.argv));
     return true;
-  }
-
-  void DockerContainerExecutorPython::stop()
-  {
-    if(!_container_id.empty()) {
-      std::string command = fmt::format("{} kill {}", _container_runtime, _container_id);
-      spdlog::info("Stopping container: {}", command);
-      int ret = system(command.c_str());
-      if(ret != 0) {
-        spdlog::warn("Failed to kill container {}", _container_id);
-      }
-      _container_id.clear();
-    }
   }
 
 }}

@@ -16,10 +16,11 @@ namespace mignificient { namespace orchestrator {
   class Users {
   public:
 
-    Users(GPUManager& gpu_manager, const Json::Value& config, const ipc::IPCConfig& ipc_config):
+    Users(GPUManager& gpu_manager, const Json::Value& config, const ipc::IPCConfig& ipc_config, ContainerWorker& container_worker):
       _config(config),
       _gpu_manager(gpu_manager),
-      _ipc_config(ipc_config)
+      _ipc_config(ipc_config),
+      _container_worker(container_worker)
     {
 
     }
@@ -243,6 +244,23 @@ namespace mignificient { namespace orchestrator {
       }
     }
 
+    // Unregistered clients that can't start anymore: on_fail(client, reason), then removed.
+    template<typename F>
+    void check_startup(std::chrono::milliseconds timeout, F on_fail)
+    {
+      for (auto& [username, clients] : _gpu_clients) {
+        for (auto it = clients.begin(); it != clients.end(); ) {
+          std::optional<std::string> reason;
+          if (!(*it)->is_active() && (reason = (*it)->startup_failure(timeout))) {
+            on_fail(it->get(), *reason);
+            it = clients.erase(it);
+          } else {
+            ++it;
+          }
+        }
+      }
+    }
+
     template<typename F>
     void check_oom(F on_oom)
     {
@@ -262,7 +280,7 @@ namespace mignificient { namespace orchestrator {
 
     static void log_ignored_executor(const ActiveInvocation& invocation, const Client* client)
     {
-      if(invocation.executor()) {
+      if(invocation.executor() && (*invocation.executor() == "container") != client->executor_ptr()->is_container()) {
         spdlog::info("Warm client {}: ignoring requested executor '{}'", client->id(), *invocation.executor());
       }
     }
@@ -311,7 +329,7 @@ namespace mignificient { namespace orchestrator {
 
       // GPUless server always runs bare-metal on the host
       GPUlessServer gpuless_server;
-      gpuless_server.start(
+      bool started = gpuless_server.start(
         _ipc_config, client_id, *selected_gpu,
         _config["poll-gpuless-sleep"].asBool(),
         _config["use-vmm"].asBool(),
@@ -330,9 +348,9 @@ namespace mignificient { namespace orchestrator {
           auto exec = std::make_unique<DockerContainerExecutorCpp>(
             _ipc_config, client_id, fname, fhandler, invocation->function_path(),
             invocation->gpu_memory(), *selected_gpu, _config["container-executor"],
-            invocation->ld_preload(), invocation->code_package(), container_runtime
+            invocation->ld_preload(), invocation->code_package(), _container_worker, container_runtime
           );
-          exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
+          started = exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx) && started;
 
           executor = std::move(exec);
         } else {
@@ -341,9 +359,9 @@ namespace mignificient { namespace orchestrator {
             _ipc_config, client_id, fname, fhandler, invocation->function_path(),
             invocation->cuda_binary(), invocation->cubin_analysis(),
             invocation->gpu_memory(), *selected_gpu, _config["container-executor"],
-            invocation->ld_preload(), invocation->code_package(), container_runtime
+            invocation->ld_preload(), invocation->code_package(), _container_worker, container_runtime
           );
-          exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
+          started = exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx) && started;
 
           executor = std::move(exec);
         }
@@ -357,7 +375,7 @@ namespace mignificient { namespace orchestrator {
             invocation->gpu_memory(), *selected_gpu, _config["bare-metal-executor"],
             invocation->ld_preload()
           );
-          exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
+          started = exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx) && started;
 
           executor = std::move(exec);
         } else {
@@ -369,13 +387,17 @@ namespace mignificient { namespace orchestrator {
             _config["bare-metal-executor"],
             invocation->ld_preload(), invocation->code_package()
           );
-          exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
+          started = exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx) && started;
 
           executor = std::move(exec);
         }
 
       }
 
+      if(!started) {
+        // Torn down by check_startup on the next tick.
+        selected_client->set_startup_error("executor failed to start: spawn failed");
+      }
       selected_client->set_spawn_time(spawn_time);
       selected_client->set_gpuless_server(std::move(gpuless_server), selected_gpu);
       selected_gpu->add_executor(executor.get());
@@ -387,6 +409,7 @@ namespace mignificient { namespace orchestrator {
     const Json::Value& _config;
     GPUManager& _gpu_manager;
     const ipc::IPCConfig& _ipc_config;
+    ContainerWorker& _container_worker;
 
     int _index = 0;
     // TODO: this might require extension to support platforms where hyperthreads have consecutive IDs

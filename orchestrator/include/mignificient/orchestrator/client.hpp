@@ -522,6 +522,13 @@ namespace mignificient { namespace orchestrator {
 
     void timeout_kill();
     void oom_kill();
+    // Kills the client like timeout_kill, but replies 503 `reason` to its invocations.
+    void fail_pending(const std::string& reason);
+
+    // Before registration: why the client can't start (a start error, an exited executor or
+    // gpuless server, or no registration within `timeout`), or nullopt while it may still start.
+    std::optional<std::string> startup_failure(std::chrono::milliseconds timeout);
+    void set_startup_error(const std::string& error) { _startup_error = error; }
 
     void set_oom_detected(bool val) { _oom_detected = val; }
     bool is_oom_detected() const { return _oom_detected; }
@@ -535,6 +542,8 @@ namespace mignificient { namespace orchestrator {
     }
 
   private:
+    void _kill(const char* what, const std::function<void(ActiveInvocation&)>& reply);
+
     Context _event_context;
 
     int _invoc_idx = 0;
@@ -546,6 +555,7 @@ namespace mignificient { namespace orchestrator {
     bool _oom_detected = false;
     std::atomic<bool> _active = false;
     std::chrono::high_resolution_clock::time_point _spawn_time;
+    std::optional<std::string> _startup_error;
 
     //executor::SwapResult _last_swap_in_stats{};
     std::function<void(const executor::SwapResult&)> _pending_swap_callback;

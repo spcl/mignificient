@@ -170,6 +170,36 @@ namespace mignificient { namespace orchestrator {
 
   void Client::timeout_kill()
   {
+    _kill("timeout_kill", [](ActiveInvocation& inv) { inv.respond_timeout(); });
+  }
+
+  void Client::fail_pending(const std::string& reason)
+  {
+    _kill("fail_pending", [&](ActiveInvocation& inv) { inv.failure(reason); });
+  }
+
+  std::optional<std::string> Client::startup_failure(std::chrono::milliseconds timeout)
+  {
+    if(_startup_error) {
+      return _startup_error;
+    }
+    if(!_gpuless_active && _gpuless_server.exited()) {
+      return "executor failed to start: gpuless server exited before registering";
+    }
+    if(!_executor_active && _executor->exited()) {
+      return "executor failed to start: executor exited before registering";
+    }
+    if(std::chrono::high_resolution_clock::now() - _spawn_time > timeout) {
+      return fmt::format(
+        "executor failed to start: {} not registered after {} ms",
+        !_executor_active ? "executor" : "gpuless server", timeout.count()
+      );
+    }
+    return std::nullopt;
+  }
+
+  void Client::_kill(const char* what, const std::function<void(ActiveInvocation&)>& reply)
+  {
     auto kill_start = std::chrono::high_resolution_clock::now();
 
     _status = ClientStatus::NOT_ACTIVE;
@@ -185,33 +215,38 @@ namespace mignificient { namespace orchestrator {
 
     auto kill_end = std::chrono::high_resolution_clock::now();
     double kill_time_us = std::chrono::duration<double, std::micro>(kill_end - kill_start).count();
-    spdlog::info("[KillStats] timeout_kill for {}: {:.1f} us ({:.3f} ms)",
-                 _id, kill_time_us, kill_time_us / 1000.0);
+    spdlog::info("[KillStats] {} for {}: {:.1f} us ({:.3f} ms)",
+                 what, _id, kill_time_us, kill_time_us / 1000.0);
 
-    // Respond with timeout error to active invocation
+    // Reply to the active invocation
     if (_active_invocation) {
-      _active_invocation->respond_timeout();
+      reply(*_active_invocation);
       auto tmp = std::move(_active_invocation);
       _active_invocation = nullptr;
       gpu_instance()->finish_current_invocation(tmp.get());
     }
 
-    // Respond with timeout error to finished invocation waiting for HTTP reply
+    // Reply to the finished invocation waiting for HTTP reply
     if (_finished_invocation) {
-      _finished_invocation->respond_timeout();
+      reply(*_finished_invocation);
       _finished_invocation = nullptr;
     }
 
-    // Drain pending invocations with timeout error
+    // Drain pending invocations
     // TODO: in future, we might want to allocate a new container for them
     while (!_pending_invocations.empty()) {
       auto inv = std::move(_pending_invocations.front());
       _pending_invocations.pop();
-      inv->respond_timeout();
+      reply(*inv);
     }
 
     // Unregister executor from GPU instance
     gpu_instance()->close_executor(_executor.get());
+
+    // Our queued invocations may have blocked others on this GPU.
+    if (!gpu_instance()->is_busy() && gpu_instance()->pending_invocations() > 0) {
+      gpu_instance()->schedule_next();
+    }
   }
 
 }}
