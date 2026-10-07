@@ -74,7 +74,8 @@ void independent(const std::string& address, int iterations, int parallel_reques
 
           for(int j = 0; j < 1; ++j) {
 
-            auto& res = results[i*parallel_requests + j];
+            // Each client owns iterations + 1 slots: the warm-up, then the timed requests.
+            auto& res = results[i*(iterations + 1)];
             SPDLOG_DEBUG("Send worker {}, iter {}", i, j);
 
             res.start = std::chrono::high_resolution_clock::now();
@@ -120,7 +121,7 @@ void independent(const std::string& address, int iterations, int parallel_reques
 
         for(int j = 0; j < iterations; ++j) {
 
-          auto& res = results[i*iterations + j + 1];
+          auto& res = results[i*(iterations + 1) + j + 1];
           //SPDLOG_DEBUG("Send worker {}, iter {}, idx {}", i, j, i*iterations + j);
 
           res.start = std::chrono::high_resolution_clock::now();
@@ -166,7 +167,7 @@ void independent(const std::string& address, int iterations, int parallel_reques
 
     for(int i = 0; i < iterations + 1; ++i) {
 
-      auto& res = results[j*iterations + i];
+      auto& res = results[j*(iterations + 1) + i];
       out << fmt::format(
         "{},{},{}\n",
         i, j,
@@ -181,7 +182,7 @@ void independent(const std::string& address, int iterations, int parallel_reques
 
     for (int i = 0; i < iterations; ++i) {
 
-      auto& res = results[j*iterations + i];
+      auto& res = results[j*(iterations + 1) + i + 1];
       spdlog::info(
         "Client {}, Invocation {}, Time {}",
         j, i,
