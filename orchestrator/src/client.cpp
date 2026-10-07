@@ -95,7 +95,7 @@ namespace mignificient { namespace orchestrator {
   }
 #endif
 
-  void Client::finished(std::string_view response)
+  void Client::finished(std::string_view response, int32_t status)
   {
     _status = ClientStatus::NOT_ACTIVE;
 
@@ -104,12 +104,12 @@ namespace mignificient { namespace orchestrator {
       auto tmp = std::move(_finished_invocation);
       _finished_invocation = nullptr;
       gpu_instance()->finish_current_invocation(tmp.get());
-      tmp->respond(response);
+      if(status != 0) tmp->respond_error(status); else tmp->respond(response);
     } else {
       auto tmp = std::move(_active_invocation);
       _active_invocation = nullptr;
       gpu_instance()->finish_current_invocation(tmp.get());
-      tmp->respond(response);
+      if(status != 0) tmp->respond_error(status); else tmp->respond(response);
     }
   }
 

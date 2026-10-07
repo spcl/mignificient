@@ -242,6 +242,22 @@ extern "C" int func(mignificient::Invocation invoc)
   return 0;
 }
 
+extern "C" int func_fail(mignificient::Invocation invoc)
+{
+  return -2;
+}
+
+extern "C" int func_hang(mignificient::Invocation invoc)
+{
+  Json::Value input_json;
+  Json::Reader reader;
+  if (!reader.parse(reinterpret_cast<const char*>(invoc.payload.data), input_json)) {
+    return -1;
+  }
+  std::this_thread::sleep_for(std::chrono::seconds(input_json["sleep-s"].asInt()));
+  return 0;
+}
+
 extern "C" int func2(mignificient::Invocation invoc)
 {
   // Three integers

@@ -1,4 +1,5 @@
 
+#include <atomic>
 #include <chrono>
 #include <drogon/HttpAppFramework.h>
 #include <fstream>
@@ -9,6 +10,8 @@
 #include <json/json.h>
 #include <spdlog/fmt/fmt.h>
 #include <spdlog/spdlog.h>
+
+static std::atomic<int> failures{0};
 
 struct InvocatonResult
 {
@@ -79,7 +82,8 @@ void independent(const std::string& address, int iterations, int parallel_reques
             res.end = std::chrono::high_resolution_clock::now();
 
             if(result != drogon::ReqResult::Ok || response->getStatusCode() != drogon::HttpStatusCode::k200OK) {
-              spdlog::error("Failed invocation! Result {}");
+              ++failures;
+            spdlog::error("Failed invocation! Result {}");
 
               if(response) {
                 spdlog::error("Status {} Code {} Body {}", drogon::to_string_view(result), response->getStatusCode(), response->body());
@@ -125,6 +129,7 @@ void independent(const std::string& address, int iterations, int parallel_reques
           SPDLOG_DEBUG("Finished worker {}, iter {}", i, j);
 
           if(result != drogon::ReqResult::Ok || response->getStatusCode() != drogon::HttpStatusCode::k200OK) {
+            ++failures;
             spdlog::error("Failed invocation! Result {}");
 
             if(response) {
@@ -251,7 +256,8 @@ void batches(const std::string& address, int iterations, int parallel_requests, 
             res.end = std::chrono::high_resolution_clock::now();
 
             if(result != drogon::ReqResult::Ok || response->getStatusCode() != drogon::HttpStatusCode::k200OK) {
-              spdlog::error("Failed invocation! Result {}");
+              ++failures;
+            spdlog::error("Failed invocation! Result {}");
 
               if(response) {
                 spdlog::error("Status {} Body {}", drogon::to_string_view(result), response->getStatusCode(), response->body());
@@ -343,5 +349,5 @@ int main(int argc, char ** argv)
   drogon::app().quit();
   drogon_thread.join();
 
-  return 0;
+  return failures ? 1 : 0;
 }

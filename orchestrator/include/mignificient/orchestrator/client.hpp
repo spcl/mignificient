@@ -290,6 +290,17 @@ namespace mignificient { namespace orchestrator {
       return _fname;
     }
 
+    const std::string& handler() const { return _handler; }
+    const std::string& function_path() const { return _function_path; }
+    Language language() const { return _language; }
+
+    void set_function_config(const std::string& handler, const std::string& path, Language lang)
+    {
+      _handler = handler;
+      _function_path = path;
+      _language = lang;
+    }
+
     const std::string& id() const
     {
       return _id;
@@ -410,7 +421,7 @@ namespace mignificient { namespace orchestrator {
       return _pending_invocations.front().get();
     }
 
-    void finished(std::string_view response);
+    void finished(std::string_view response, int32_t status = 0);
 
     void yield();
 
@@ -541,6 +552,9 @@ namespace mignificient { namespace orchestrator {
 
     std::string _id;
     std::string _fname;
+    std::string _handler;
+    std::string _function_path;
+    Language _language = Language::CPP;
     ipc::IPCBackend _ipc_backend;  // IPC backend selection (v1 or v2)
     ipc::BufferConfig _executor_buffer_config;  // Buffer sizes for orchestrator-executor channel
     ipc::BufferConfig _gpuless_buffer_config;   // Buffer sizes for orchestrator-gpuless channel

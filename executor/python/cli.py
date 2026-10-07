@@ -3,7 +3,9 @@ import importlib.machinery
 import importlib.util
 import json
 import numpy as np
+import operator
 import os
+import traceback
 
 import mignificient
 
@@ -43,7 +45,16 @@ if __name__ == "__main__":
             print("Empty payload, quit")
             break
 
-        size = func(mignificient.Invocation(runtime, invocation_data, runtime.result()))
+        try:
+            size = func(mignificient.Invocation(runtime, invocation_data, runtime.result()))
+            # The handler returns the result size; None means no result. Anything else that isn't an
+            # integer would raise in finish(), outside this try, and end the executor.
+            #
+            # operator.index guarantees that we don't do accidentally accept a float
+            size = 0 if size is None else operator.index(size)
+        except Exception:
+            traceback.print_exc()
+            size = -1
 
         runtime.finish(size)
 

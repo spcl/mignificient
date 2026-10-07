@@ -65,7 +65,8 @@ namespace mignificient { namespace executor {
 
   void CommunicationIceoryxV1::finish(int size)
   {
-    _result.value()->size = size;
+    _result.value()->status = size < 0 ? size : 0;
+    _result.value()->size = size < 0 ? 0 : size;
     _result.value()->msg = Message::FINISH;
     _result->publish();
 
@@ -119,7 +120,8 @@ namespace mignificient { namespace executor {
   void CommunicationIceoryxV2::finish(int size)
   {
     _result.value().payload_mut().msg = Message::FINISH;
-    _result.value().payload_mut().size = size;
+    _result.value().payload_mut().status = size < 0 ? size : 0;
+    _result.value().payload_mut().size = size < 0 ? 0 : size;
     auto initialized_sample = iox2::assume_init(std::move(_result.value()));
     auto res = iox2::send(std::move(initialized_sample));
     if(!res.has_value()) {

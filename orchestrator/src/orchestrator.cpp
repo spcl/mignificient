@@ -126,7 +126,7 @@ namespace mignificient { namespace orchestrator {
       if(res.value().get()->msg == executor::Message::FINISH) {
 
         client->send_gpuless_msg(GPUlessMessage::INVOCATION_FINISH);
-        client->finished(std::string_view{reinterpret_cast<const char*>(res.value().get()->data), res.value().get()->size});
+        client->finished(std::string_view{reinterpret_cast<const char*>(res.value().get()->data), res.value().get()->size}, res.value().get()->status);
 
       } else if (res.value().get()->msg == executor::Message::YIELD) {
 
@@ -184,7 +184,7 @@ namespace mignificient { namespace orchestrator {
     if(payload.msg == executor::Message::FINISH) {
 
       client->send_gpuless_msg(GPUlessMessage::INVOCATION_FINISH);
-      client->finished(std::string_view{reinterpret_cast<const char*>(payload.data), payload.size});
+      client->finished(std::string_view{reinterpret_cast<const char*>(payload.data), payload.size}, payload.status);
 
     } else if (res.value()->payload().msg == executor::Message::YIELD) {
 

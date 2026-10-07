@@ -1,0 +1,15 @@
+{
+  "language": "cpp",
+  "function-path": "@BUILD@/examples/libvector_add.so",
+  "code-package": null,
+  "ok":   {"function": "func", "function-handler": "func",
+           "payload": {"sleep-time": 0, "vec-elements": 1048576, "data-transfers": 4}, "expect": null},
+  "fail": {"function": "func_fail", "function-handler": "func_fail"},
+  "hang": {"function": "func_hang", "function-handler": "func_hang", "payload": {"sleep-s": 30}, "timeout": 3,
+           "restart-payload": {"sleep-s": 0}},
+  "switch": {"function": "func", "function-handler": "func_fail"},
+  "badpath": {"function": "func", "function-handler": "func", "function-path": "/nonexistent/libnone.so",
+              "payload": {"sleep-time": 0, "vec-elements": 1024, "data-transfers": 1}},
+  "timeout": 60,
+  "gpu-memory": 1024
+}

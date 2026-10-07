@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.17)
 include(FetchContent)
 project(mignificient)
 
+# Single source of truth for the iceoryx2 version (also read by the Docker image).
+set(MIGNIFICIENT_ICEORYX2_VERSION v0.8.1)
+
 set(EXTERNAL_INSTALL_LOCATION ${CMAKE_BINARY_DIR}/external)
 
 option(WITH_PROFILING "Additional profiling output" OFF)
@@ -89,14 +92,21 @@ if(BUILD_ICEORYX2)
   # Add compile definition for all targets
   add_compile_definitions(MIGNIFICIENT_WITH_ICEORYX2)
 
-  find_package(iceoryx2-cxx REQUIRED)
-
-  message(STATUS "iceoryx2 include directory: ${ICEORYX2_INCLUDE_DIR}")
-  message(STATUS "iceoryx2 library directory: ${ICEORYX2_LIB_DIR}")
+  message(STATUS "Fetching iceoryx2 ${MIGNIFICIENT_ICEORYX2_VERSION}")
+  set(BUILD_CXX ON CACHE INTERNAL "")
+  set(BUILD_EXAMPLES OFF CACHE INTERNAL "")
+  set(BUILD_TESTING OFF CACHE INTERNAL "")
+  FetchContent_Declare(iceoryx2
+    GIT_REPOSITORY https://github.com/eclipse-iceoryx/iceoryx2.git
+    GIT_TAG ${MIGNIFICIENT_ICEORYX2_VERSION}
+    UPDATE_DISCONNECTED 1
+  )
+  FetchContent_MakeAvailable(iceoryx2)
 else()
   message(STATUS "Building with iceoryx1 only (BUILD_ICEORYX2=OFF)")
 endif()
 
+set(FLATBUFFERS_BUILD_TESTS OFF CACHE INTERNAL "")
 add_subdirectory(${CMAKE_SOURCE_DIR}/external/flatbuffers
                  ${EXTERNAL_INSTALL_LOCATION}/flatbuffers-build
                  EXCLUDE_FROM_ALL)
@@ -124,3 +134,9 @@ configure_file(
   ${CMAKE_SOURCE_DIR}/config/invoker.json.in
   ${CMAKE_BINARY_DIR}/config/invoker.json
 )
+
+option(BUILD_INTEGRATION_TESTS "Register GPU integration tests (tests/integration)" ON)
+if(BUILD_INTEGRATION_TESTS)
+  enable_testing()
+  add_subdirectory(tests/integration)
+endif()
