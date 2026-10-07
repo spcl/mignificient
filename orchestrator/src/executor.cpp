@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <string_view>
 #include <cstdlib>
 #include <fcntl.h>
@@ -210,6 +211,20 @@ namespace mignificient { namespace orchestrator {
 
     if(cpu_idx != -1) {
       spec.env.emplace_back("CPU_BIND_IDX", std::to_string(cpu_idx));
+    }
+
+    // Models live in the package: TORCH_HOME=<pkg>/<torch-home> (read-only in containers).
+    if(_code_package.has_value()) {
+      Json::Value meta;
+      std::ifstream meta_file{*_code_package + "/package.json"};
+      if(Json::Reader{}.parse(meta_file, meta) && meta["torch-home"].isString()) {
+        std::filesystem::path rel{meta["torch-home"].asString()};
+        if(rel.is_relative() && !rel.empty() && std::none_of(rel.begin(), rel.end(), [](const auto& c) { return c == ".."; })) {
+          spec.env.emplace_back("TORCH_HOME", *_code_package + "/" + rel.string());
+        } else {
+          spdlog::warn("Ignoring invalid torch-home '{}' in {}/package.json", rel.string(), *_code_package);
+        }
+      }
     }
 
     return spec;
