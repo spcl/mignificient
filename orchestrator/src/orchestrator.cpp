@@ -688,7 +688,7 @@ namespace mignificient { namespace orchestrator {
     }
 
     _users.check_startup(_startup_timeout, [this](Client* client, const std::string& reason) {
-      spdlog::error("Startup failure for client {}: {}", client->id(), reason);
+      spdlog::error("Client {} failed: {}", client->id(), reason);
       _detach_client(client);
       client->fail_pending(reason);
       _gpu_manager.return_gpu(client->gpu_instance());

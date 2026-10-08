@@ -51,11 +51,17 @@ namespace mignificient { namespace orchestrator {
     // Reaps the server if it has exited; the pid is then forgotten, so it's never signalled.
     bool exited()
     {
-      if(_pid > 0 && waitpid(_pid, nullptr, WNOHANG) == _pid) {
+      if(_pid > 0 && waitpid(_pid, &_status, WNOHANG) == _pid) {
         _pid = -1;
         return true;
       }
       return false;
+    }
+
+    // After exited(): killed by a signal or failed. A clean exit follows an OOM report.
+    bool crashed() const
+    {
+      return !(WIFEXITED(_status) && WEXITSTATUS(_status) == 0);
     }
 
     void stop()
@@ -69,6 +75,7 @@ namespace mignificient { namespace orchestrator {
 
   private:
     pid_t _pid = -1;
+    int _status = 0;
   };
 
   /**

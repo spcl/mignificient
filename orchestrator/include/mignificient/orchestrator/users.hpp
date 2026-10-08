@@ -251,7 +251,7 @@ namespace mignificient { namespace orchestrator {
       for (auto& [username, clients] : _gpu_clients) {
         for (auto it = clients.begin(); it != clients.end(); ) {
           std::optional<std::string> reason;
-          if (!(*it)->is_active() && (reason = (*it)->startup_failure(timeout))) {
+          if ((reason = (*it)->startup_failure(timeout))) {
             on_fail(it->get(), *reason);
             it = clients.erase(it);
           } else {

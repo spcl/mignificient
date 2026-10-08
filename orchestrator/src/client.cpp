@@ -191,13 +191,20 @@ namespace mignificient { namespace orchestrator {
     if(_startup_error) {
       return _startup_error;
     }
-    if(!_gpuless_active && _gpuless_server.exited()) {
-      return "executor failed to start: gpuless server exited before registering";
+    // After registration too: a crashed server (e.g. SIGKILL) leaves its iceoryx2 ports behind, and the
+    // executor would wait for answers until the function timeout.
+    if(_gpuless_server.exited()) {
+      if(!_gpuless_active) {
+        return "executor failed to start: gpuless server exited before registering";
+      }
+      if(_gpuless_server.crashed()) {
+        return "gpuless server crashed";
+      }
     }
-    if(!_executor_active && _executor->exited()) {
-      return "executor failed to start: executor exited before registering";
+    if(_executor->exited()) {
+      return _executor_active ? "executor exited" : "executor failed to start: executor exited before registering";
     }
-    if(std::chrono::high_resolution_clock::now() - _spawn_time > timeout) {
+    if(!is_active() && std::chrono::high_resolution_clock::now() - _spawn_time > timeout) {
       return fmt::format(
         "executor failed to start: {} not registered after {} ms",
         !_executor_active ? "executor" : "gpuless server", timeout.count()

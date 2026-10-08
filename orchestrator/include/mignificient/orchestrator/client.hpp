@@ -538,8 +538,8 @@ namespace mignificient { namespace orchestrator {
     // Kills the client like timeout_kill, but replies 503 `reason` to its invocations.
     void fail_pending(const std::string& reason);
 
-    // Before registration: why the client can't start (a start error, an exited executor or
-    // gpuless server, or no registration within `timeout`), or nullopt while it may still start.
+    // Why the client is dead or can't start (a start error, an exited executor, an exited gpuless server
+    // before registration or a crashed one after it, no registration within `timeout`), or nullopt.
     std::optional<std::string> startup_failure(std::chrono::milliseconds timeout);
     void set_startup_error(const std::string& error) { _startup_error = error; }
 
