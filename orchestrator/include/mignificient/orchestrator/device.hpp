@@ -171,26 +171,32 @@ namespace mignificient { namespace orchestrator {
       }
     }
 
-    void yield_current_invocation()
+    // Returns false when the client doesn't own the GPU (a second yield, or a yield before its turn).
+    bool yield_current_invocation(Client* yielding)
     {
       if(_sharing_model == SharingModel::SEQUENTIAL) {
-        return;
+        return false;
       }
 
       auto [invoc, client] = _current_invocation;
+      if(client != yielding) {
+        return false;
+      }
       SPDLOG_DEBUG("[GPUInstance] Yielded invocation with id {} for client {}", invoc->uuid(), client->id());
 
-      auto current_client = std::get<1>(_current_invocation);
       _current_invocation = std::make_tuple(nullptr, nullptr);
 
-      if(current_client == std::get<1>(_pending_invocations.front())) {
-        SPDLOG_DEBUG("Yielded but next invocation on the same container; waiting.");
-        return;
+      if(_pending_invocations.empty()) {
+        return true;
       }
 
-      if(!_pending_invocations.empty()) {
-        schedule_next();
+      if(client == std::get<1>(_pending_invocations.front())) {
+        SPDLOG_DEBUG("Yielded but next invocation on the same container; waiting.");
+        return true;
       }
+
+      schedule_next();
+      return true;
     }
 
     void add_executor(Executor* executor)

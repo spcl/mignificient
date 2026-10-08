@@ -165,9 +165,9 @@ namespace mignificient { namespace orchestrator {
 
   void Client::yield()
   {
-    gpu_instance()->yield_current_invocation();
-
-    _status = ClientStatus::NOT_ACTIVE;
+    if(gpu_instance()->yield_current_invocation(this)) {
+      _status = ClientStatus::NOT_ACTIVE;
+    }
   }
 
   void Client::oom_kill()
