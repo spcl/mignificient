@@ -126,6 +126,12 @@ namespace mignificient { namespace orchestrator {
 
   Client::~Client()
   {
+    // A no-op after a kill; on orchestrator shutdown it stops the processes and containers still running
+    // (container stops are queued to the worker, which runs them before it exits).
+    _gpuless_server.stop();
+    if(_executor) {
+      _executor->stop();
+    }
 #ifdef MIGNIFICIENT_WITH_ICEORYX2
     if(_comm_v2) {
       // Close our ports and node first, then drop everything the client's processes left behind.
@@ -173,12 +179,9 @@ namespace mignificient { namespace orchestrator {
     // Kill executor (process or container)
     _executor->stop();
 
-    // Gpuless should be exiting on its own; give it a moment, then force kill
-    pid_t gpuless_pid = _gpuless_server.pid();
-    if (gpuless_pid > 0 && waitpid(gpuless_pid, nullptr, WNOHANG) == 0) {
-      // Not yet exited, force kill
-      kill(gpuless_pid, SIGKILL);
-      waitpid(gpuless_pid, nullptr, 0);
+    // Gpuless should be exiting on its own; if it hasn't yet, force kill
+    if (!_gpuless_server.exited()) {
+      _gpuless_server.stop();
     }
     gpu_instance()->remove_pending_invocations(this);
 
@@ -249,11 +252,7 @@ namespace mignificient { namespace orchestrator {
     _status = ClientStatus::NOT_ACTIVE;
 
     // Kill gpuless server (always bare-metal) and executor
-    pid_t gpuless_pid = _gpuless_server.pid();
-    if (gpuless_pid > 0) {
-      kill(gpuless_pid, SIGKILL);
-      waitpid(gpuless_pid, nullptr, 0);
-    }
+    _gpuless_server.stop();
     _executor->stop();
     gpu_instance()->remove_pending_invocations(this);
 

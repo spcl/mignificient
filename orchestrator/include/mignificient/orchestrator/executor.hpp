@@ -58,6 +58,14 @@ namespace mignificient { namespace orchestrator {
       return false;
     }
 
+    void stop()
+    {
+      if(_pid > 0) {
+        kill(_pid, SIGKILL);
+        waitpid(_pid, nullptr, 0);
+        _pid = -1;
+      }
+    }
 
   private:
     pid_t _pid = -1;
