@@ -19,12 +19,17 @@ pybind11
 Host builds must use CUDA 11.6, the same version as the executor container image and the conda PyTorch packages.
 A server built with another CUDA version reports a different number of device attributes (`CU_DEVICE_ATTRIBUTE_MAX` is 122 in 11.6, 125 in 11.8), which mismatches the 11.6 clients.
 CMake does not pick the toolkit for you: without the flags below it uses whatever `nvcc` is first on `PATH` (often `/usr/local/cuda`). Pass the compiler and root explicitly, put 11.6 first on `PATH`, and check `CMakeCache.txt` and `ldd` afterwards.
-CUDA 11.6 does not know `sm_89`; use `-DCMAKE_CUDA_ARCHITECTURES=86` (PTX is JIT-compiled on newer GPUs).
+
+CUDA 11.6 `nvcc` does not support `sm_89`, so `-DCMAKE_CUDA_ARCHITECTURES=89` fails the compiler check; pass a value it accepts (86 here).
+That option only affects the compiler check: `gpuless/CMakeLists.txt` sets `CMAKE_CUDA_ARCHITECTURES "80"` itself and `examples/CMakeLists.txt` sets `80 86`.
 
 ```
 CUDA=/path/to/cuda-11.6                     # e.g. /opt/cuda/cuda-11.6
-# pinned iceoryx2 (v0.8.1) installed next to the build tree
-cmake --install <pinned-iceoryx2-build>/_deps/iceoryx2-build --prefix $PWD/build-cu116/iox2-install
+# pinned iceoryx2 v0.8.1, installed into build-cu116/iox2-install (needs git, cargo, cmake)
+git clone --depth 1 --branch v0.8.1 https://github.com/eclipse-iceoryx/iceoryx2.git build-cu116/iox2-src
+cmake -S build-cu116/iox2-src -B build-cu116/iox2-build -DCMAKE_BUILD_TYPE=Release -DBUILD_CXX=ON \
+  -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX=$PWD/build-cu116/iox2-install
+cmake --build build-cu116/iox2-build -j16 && cmake --install build-cu116/iox2-build
 export PATH=$CUDA/bin:$PATH
 cmake -S . -B build-cu116 -DCMAKE_BUILD_TYPE=Release -DBUILD_ICEORYX2=TRUE -DCMAKE_CUDA_ARCHITECTURES=86 \
   -DCMAKE_CUDA_COMPILER=$CUDA/bin/nvcc -DCUDAToolkit_ROOT=$CUDA \
@@ -35,7 +40,8 @@ cmake -S . -B build-cu116 -DCMAKE_BUILD_TYPE=Release -DBUILD_ICEORYX2=TRUE -DCMA
 cmake --build build-cu116 -j16
 ```
 
-`-DPython_EXECUTABLE` selects the interpreter for the `_mignificient` executor module; its version must match the interpreter that runs the functions (3.9 for the conda environments used with the container image).
+pybind11 is header-only and its CMake config does not depend on the Python version, so `pybind11_DIR` can come from any installed pybind11 (the build used one from a Python 3.10 site-packages).
+`-DPython_EXECUTABLE` alone selects the Python for the `_mignificient` executor module; its version must match the interpreter that runs the functions (3.9 for the conda environments used with the container image).
 Verify the toolkit:
 
 ```
