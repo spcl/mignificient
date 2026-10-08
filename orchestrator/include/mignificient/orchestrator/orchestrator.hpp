@@ -41,13 +41,6 @@ namespace mignificient { namespace orchestrator {
     static const ipc::IPCConfig& ipc_config() { return _ipc_config; }
     static ipc::IPCBackend ipc_backend() { return _ipc_config.backend; }
 
-#ifdef MIGNIFICIENT_WITH_ICEORYX2
-    static iox2::Node<iox2::ServiceType::Ipc>& iceoryx_node_v2()
-    {
-      return _iox2_node.value();
-    }
-#endif
-
   private:
 
     int _client_id = 0;
@@ -96,7 +89,6 @@ namespace mignificient { namespace orchestrator {
     void _event_loop_v1();
 
 #ifdef MIGNIFICIENT_WITH_ICEORYX2
-    static std::optional<iox2::Node<iox2::ServiceType::Ipc>> _iox2_node;
 
     std::optional<iox2::WaitSet<iox2::ServiceType::Ipc>> _waitset_v2;
 

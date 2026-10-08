@@ -1,6 +1,8 @@
 
 #include <mignificient/orchestrator/orchestrator.hpp>
 
+#include <filesystem>
+
 #include <stdexcept>
 
 #include <drogon/drogon.h>
@@ -29,9 +31,6 @@ namespace mignificient { namespace orchestrator {
   std::shared_ptr<HTTPServer> Orchestrator::_http_server;
   ipc::IPCConfig Orchestrator::_ipc_config;
 
-#ifdef MIGNIFICIENT_WITH_ICEORYX2
-  std::optional<iox2::Node<iox2::ServiceType::Ipc>> Orchestrator::_iox2_node;
-#endif
 
   static void _handle_swap_confirm(int msg, Client* client)
   {
@@ -266,13 +265,12 @@ namespace mignificient { namespace orchestrator {
     }
 #ifdef MIGNIFICIENT_WITH_ICEORYX2
     else if (_ipc_config.backend == ipc::IPCBackend::ICEORYX_V2) {
-      auto node_result = iox2::NodeBuilder().create<iox2::ServiceType::Ipc>();
-      if(!node_result.has_value()) {
-        spdlog::error("Failed to create iceoryx2 Node: {}", static_cast<uint64_t>(node_result.error()));
-        throw std::runtime_error("Failed to create iceoryx2 Node");
+      // Each client gets its own node and iceoryx2 directory under this base (see Client).
+      const auto& base = _ipc_config.client_root_base;
+      if(std::filesystem::create_directories(base)) {
+        std::filesystem::permissions(base, std::filesystem::perms::owner_all);
       }
-      spdlog::info("Created iceoryx2 Node for orchestrator");
-      _iox2_node = std::move(node_result.value());
+      spdlog::info("iceoryx2 client directories under {}", base);
     }
 #endif
     else {

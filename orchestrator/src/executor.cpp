@@ -12,6 +12,9 @@
 #include <sched.h>
 
 #include <mignificient/orchestrator/device.hpp>
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+#include <mignificient/executor/iox2_config.hpp>
+#endif
 
 namespace mignificient { namespace orchestrator {
 
@@ -54,6 +57,10 @@ namespace mignificient { namespace orchestrator {
     envs.emplace_back(const_cast<char*>(req_size.c_str()));
     envs.emplace_back(const_cast<char*>(resp_size.c_str()));
     envs.emplace_back(const_cast<char*>(queue_cap.c_str()));
+    std::string iox2_root = fmt::format("{}={}", IOX2_ROOT_ENV, ipc_config.client_root(user_id));
+    if(ipc_config.backend == ipc::IPCBackend::ICEORYX_V2) {
+      envs.emplace_back(const_cast<char*>(iox2_root.c_str()));
+    }
 #endif
 
     envs.emplace_back(nullptr);
@@ -104,6 +111,10 @@ namespace mignificient { namespace orchestrator {
     envs.add(const_cast<char*>(temporary_envs.back().c_str()));
     temporary_envs.push_back(fmt::format("GPULESS_QUEUE_CAPACITY={}", _ipc_config.buffer_configs.at("gpuless-executor").queue_capacity));
     envs.add(const_cast<char*>(temporary_envs.back().c_str()));
+    if(auto root = _iox2_root()) {
+      temporary_envs.push_back(fmt::format("{}={}", IOX2_ROOT_ENV, *root));
+      envs.add(const_cast<char*>(temporary_envs.back().c_str()));
+    }
 #endif
   }
 
@@ -207,6 +218,9 @@ namespace mignificient { namespace orchestrator {
     spec.env.emplace_back("GPULESS_REQUEST_SIZE", std::to_string(_ipc_config.buffer_configs.at("gpuless-executor").request_size));
     spec.env.emplace_back("GPULESS_RESPONSE_SIZE", std::to_string(_ipc_config.buffer_configs.at("gpuless-executor").response_size));
     spec.env.emplace_back("GPULESS_QUEUE_CAPACITY", std::to_string(_ipc_config.buffer_configs.at("gpuless-executor").queue_capacity));
+    if(auto root = _iox2_root()) {
+      spec.env.emplace_back(IOX2_ROOT_ENV, *root);
+    }
 #endif
 
     if(cpu_idx != -1) {
@@ -286,26 +300,22 @@ namespace mignificient { namespace orchestrator {
     return true;
   }
 
-  // iceoryx2's default root; bind-mounted at the same path into executor containers.
-  static constexpr const char* ICEORYX2_ROOT = "/tmp/iceoryx2";
-
   /**
-   * `<runtime> run -d --rm --user <uid>:<gid> [-v <pkg>:<pkg>:ro] <ipc mounts> [--label] -e ... <image> <argv>`
+   * `<runtime> run -d --rm --user <uid>:<gid> [-v <pkg>:<pkg>:ro] <ipc mount> [--label] -e ... <image> <argv>`
    * The code package is mounted read-only at its host path, so host paths stay valid inside.
+   * IPC: with iceoryx2 only the client's own iceoryx2 directory (iox2_root, same path inside), so
+   * the container can't see other clients' services; with iceoryx1 the host's /dev/shm.
    * The ContainerWorker runs it.
    */
   static std::vector<std::string> _container_argv(
     const std::string& container_runtime,
     const std::string& image,
     const std::optional<std::string>& code_package,
+    const std::optional<std::string>& iox2_root,
     const std::vector<std::pair<std::string, std::string>>& env_vars,
     const std::vector<std::string>& cmd
   )
   {
-    std::error_code ec;
-    // A bind mount fails if its source is missing.
-    std::filesystem::create_directories(ICEORYX2_ROOT, ec);
-
     std::vector<std::string> args = {
       container_runtime, "run", "-d", "--rm",
       "--user", fmt::format("{}:{}", getuid(), getgid())
@@ -329,12 +339,17 @@ namespace mignificient { namespace orchestrator {
       args.insert(args.end(), {"--mount", fmt::format("type=bind,source={0},target={0},readonly", code_package.value())});
     }
 
-    args.insert(args.end(), {"--mount", "type=bind,source=/dev/shm,target=/dev/shm"});
-    args.insert(args.end(), {"--mount", fmt::format("type=bind,source={0},target={0}", ICEORYX2_ROOT)});
+    if(iox2_root.has_value()) {
+      args.insert(args.end(), {"--mount", fmt::format("type=bind,source={0},target={0}", iox2_root.value())});
+    } else {
+      args.insert(args.end(), {"--mount", "type=bind,source=/dev/shm,target=/dev/shm"});
+    }
 
+    // The host's iceoryx2 config (read-only; no IPC state), so both sides use the same defaults.
+    std::error_code ec;
     const char* home = getenv("HOME");
     if(home && std::filesystem::is_directory(fmt::format("{}/.config/iceoryx2", home), ec)) {
-      args.insert(args.end(), {"--mount", fmt::format("type=bind,source={}/.config/iceoryx2,target=/etc/iceoryx2", home)});
+      args.insert(args.end(), {"--mount", fmt::format("type=bind,source={}/.config/iceoryx2,target=/etc/iceoryx2,readonly", home)});
     }
 
     // Lets the test harness find and clean up containers of one test run.
@@ -378,13 +393,16 @@ namespace mignificient { namespace orchestrator {
     env_vars.emplace_back("GPULESS_REQUEST_SIZE", std::to_string(_ipc_config.buffer_configs.at("gpuless-executor").request_size));
     env_vars.emplace_back("GPULESS_RESPONSE_SIZE", std::to_string(_ipc_config.buffer_configs.at("gpuless-executor").response_size));
     env_vars.emplace_back("GPULESS_QUEUE_CAPACITY", std::to_string(_ipc_config.buffer_configs.at("gpuless-executor").queue_capacity));
+    if(auto root = _iox2_root()) {
+      env_vars.emplace_back(IOX2_ROOT_ENV, *root);
+    }
 #endif
 
     if(cpu_idx != -1) {
       env_vars.emplace_back("CPU_BIND_IDX", std::to_string(cpu_idx));
     }
 
-    _worker->start(_user, _container_argv(_container_runtime, _image, _code_package, env_vars, {_cpp_executor}));
+    _worker->start(_user, _container_argv(_container_runtime, _image, _code_package, _iox2_root(), env_vars, {_cpp_executor}));
     return true;
   }
 
@@ -392,7 +410,7 @@ namespace mignificient { namespace orchestrator {
   {
     LaunchSpec spec = python_launch(poll_sleep, cpu_idx);
 
-    _worker->start(_user, _container_argv(_container_runtime, _image, _code_package, spec.env, spec.argv));
+    _worker->start(_user, _container_argv(_container_runtime, _image, _code_package, _iox2_root(), spec.env, spec.argv));
     return true;
   }
 

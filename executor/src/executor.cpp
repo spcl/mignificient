@@ -1,5 +1,8 @@
 
 #include <mignificient/executor/executor.hpp>
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+#include <mignificient/executor/iox2_config.hpp>
+#endif
 
 #include <dlfcn.h>
 
@@ -141,12 +144,14 @@ namespace mignificient { namespace executor {
 
   CommunicationIceoryxV2::CommunicationIceoryxV2(const std::string& name)
   {
-    auto node_result = iox2::NodeBuilder().create<iox2::ServiceType::Ipc>();
+    // The orchestrator passes the client's iceoryx2 root directory.
+    const char* root = std::getenv(IOX2_ROOT_ENV);
+    auto node_result = iox2::NodeBuilder().config(iox2_config(root)).create<iox2::ServiceType::Ipc>();
     if(!node_result.has_value()) {
       spdlog::error("Failed to create iceoryx2 Node: {}", static_cast<uint64_t>(node_result.error()));
       throw std::runtime_error("Failed to create iceoryx2 Node");
     }
-    spdlog::info("Created iceoryx2 Node for executor");
+    spdlog::info("Created iceoryx2 Node for executor, root {}", root ? root : "(default)");
     iox2_node = std::move(node_result.value());
 
     {

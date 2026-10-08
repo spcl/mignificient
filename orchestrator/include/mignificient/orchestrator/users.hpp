@@ -298,7 +298,9 @@ namespace mignificient { namespace orchestrator {
       auto it_gpuless = _ipc_config.buffer_configs.find("orchestrator-gpuless");
       if (it_gpuless != _ipc_config.buffer_configs.end()) gpuless_buf = it_gpuless->second;
 
-      _gpu_clients[username].push_back(std::make_unique<Client>(_ipc_config.backend, client_id, fname, executor_buf, gpuless_buf));
+      _gpu_clients[username].push_back(std::make_unique<Client>(
+        _ipc_config.backend, client_id, fname, executor_buf, gpuless_buf, _ipc_config.client_root(client_id)
+      ));
       auto selected_client = _gpu_clients[username].back().get();
       selected_client->set_function_config(fhandler, invocation->function_path(), invocation->language());
 
@@ -325,7 +327,8 @@ namespace mignificient { namespace orchestrator {
 
       // The request's "executor" picks the executor kind of a new client; config is the default.
       bool use_container = invocation->executor().value_or(_config["type"].asString()) == "container";
-      spdlog::info("Allocate client {} with {} executor", client_id, use_container ? "container" : "bare-metal");
+      spdlog::info("Allocate client {} with {} executor{}", client_id, use_container ? "container" : "bare-metal",
+                   _ipc_config.backend == ipc::IPCBackend::ICEORYX_V2 ? ", iceoryx2 directory " + _ipc_config.client_root(client_id) : "");
 
       // GPUless server always runs bare-metal on the host
       GPUlessServer gpuless_server;

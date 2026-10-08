@@ -192,6 +192,15 @@ namespace mignificient { namespace orchestrator {
 
   protected:
       void _configure_backends(Environment& env);
+
+      // The client's own iceoryx2 directory (iceoryx2 backend only).
+      std::optional<std::string> _iox2_root() const
+      {
+        if(_ipc_config.backend != ipc::IPCBackend::ICEORYX_V2) {
+          return std::nullopt;
+        }
+        return _ipc_config.client_root(_user);
+      }
       std::vector<std::string> temporary_envs;
 
       const ipc::IPCConfig& _ipc_config;

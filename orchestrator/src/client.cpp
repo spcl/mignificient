@@ -1,6 +1,13 @@
+#include <cerrno>
 #include <chrono>
+#include <cstring>
+#include <filesystem>
+#include <sys/stat.h>
 
 #include <mignificient/orchestrator/client.hpp>
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+#include <mignificient/executor/iox2_config.hpp>
+#endif
 
 #include <mignificient/orchestrator/device.hpp>
 #include <mignificient/orchestrator/orchestrator.hpp>
@@ -8,9 +15,15 @@
 namespace mignificient { namespace orchestrator {
 
 #ifdef MIGNIFICIENT_WITH_ICEORYX2
-  CommunicationIceoryxV2::CommunicationIceoryxV2(const std::string& id)
+  CommunicationIceoryxV2::CommunicationIceoryxV2(const std::string& id, const std::string& root)
   {
-    auto& node = Orchestrator::iceoryx_node_v2();
+    auto node_result = iox2::NodeBuilder().config(iox2_config(root.c_str())).create<iox2::ServiceType::Ipc>();
+    if(!node_result.has_value()) {
+      spdlog::error("Failed to create iceoryx2 node for client {} in {}: {}", id, root, static_cast<uint64_t>(node_result.error()));
+      abort();
+    }
+    this->node = std::move(node_result.value());
+    auto& node = this->node.value();
     {
       auto exec_send_service = node.service_builder(
           iox2::ServiceName::create(fmt::format("{}.Orchestrator.Client.Send", id).c_str()).value())
@@ -94,6 +107,34 @@ namespace mignificient { namespace orchestrator {
 
   }
 #endif
+
+  void Client::_create_iox2_root()
+  {
+    std::error_code ec;
+    // Left over by an orchestrator that didn't shut down cleanly (client ids restart at 0).
+    if(std::filesystem::exists(_iox2_root, ec)) {
+      spdlog::warn("Removing stale iceoryx2 directory {}", _iox2_root);
+      std::filesystem::remove_all(_iox2_root, ec);
+    }
+    if(mkdir(_iox2_root.c_str(), 0700) != 0) {
+      spdlog::error("Failed to create iceoryx2 directory {}: {}", _iox2_root, strerror(errno));
+    }
+  }
+
+  Client::~Client()
+  {
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+    if(_comm_v2) {
+      // Close our ports and node first, then drop everything the client's processes left behind.
+      _comm_v2.reset();
+      std::error_code ec;
+      std::filesystem::remove_all(_iox2_root, ec);
+      if(ec) {
+        spdlog::error("Failed to remove iceoryx2 directory {}: {}", _iox2_root, ec.message());
+      }
+    }
+#endif
+  }
 
   void Client::finished(std::string_view response, int32_t status)
   {

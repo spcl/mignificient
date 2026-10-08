@@ -35,9 +35,9 @@ int main(int argc, char ** argv)
     }
   }
 
-  mignificient::orchestrator::Orchestrator::init(config);
   std::optional<mignificient::orchestrator::Orchestrator> orchestrator;
   try {
+    mignificient::orchestrator::Orchestrator::init(config);
     orchestrator.emplace(config, argv[2]);
   } catch (const std::exception& e) {
     spdlog::error("Failed to start the orchestrator: {}", e.what());

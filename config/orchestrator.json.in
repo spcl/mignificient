@@ -4,6 +4,7 @@
   "timeout-check-interval-ms": 100,
   "ipc": {
     "backend": "iceoryx2",
+    "client-root-base": "/dev/shm/mignificient",
     "buffer-config": {
       "orchestrator-executor": {
         "invocation-size": 1048576,

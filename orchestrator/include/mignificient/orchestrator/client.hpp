@@ -94,6 +94,9 @@ namespace mignificient { namespace orchestrator {
 #ifdef MIGNIFICIENT_WITH_ICEORYX2
   struct CommunicationIceoryxV2
   {
+    // The client's own node, rooted in its iceoryx2 directory. Declared first: destroyed last.
+    std::optional<iox2::Node<iox2::ServiceType::Ipc>> node;
+
     std::optional<iox2::PortFactoryEvent<iox2::ServiceType::Ipc>> client_event_notify;
     std::optional<iox2::PortFactoryEvent<iox2::ServiceType::Ipc>> client_event_listen;
     std::optional<iox2::Publisher<iox2::ServiceType::Ipc, mignificient::executor::Invocation, void>> client_send;
@@ -112,7 +115,7 @@ namespace mignificient { namespace orchestrator {
 
     std::optional<iox2::SampleMutUninit<iox2::ServiceType::Ipc, mignificient::executor::Invocation, void>> client_payload;
 
-    CommunicationIceoryxV2(const std::string& id);
+    CommunicationIceoryxV2(const std::string& id, const std::string& root);
 
   };
 #endif
@@ -120,9 +123,12 @@ namespace mignificient { namespace orchestrator {
   struct Client
   {
 
+    // iox2_root: the client's iceoryx2 directory (iceoryx2 backend only); created here,
+    // removed with the client.
     Client(ipc::IPCBackend backend, const std::string& id, const std::string& fname,
           const ipc::BufferConfig& executor_buf_config = {},
-          const ipc::BufferConfig& gpuless_buf_config = {}
+          const ipc::BufferConfig& gpuless_buf_config = {},
+          const std::string& iox2_root = {}
     ):
       _id(id),
       _fname(fname),
@@ -136,13 +142,17 @@ namespace mignificient { namespace orchestrator {
         _comm_v1.emplace(id);
 #ifdef MIGNIFICIENT_WITH_ICEORYX2
       } else if(backend == ipc::IPCBackend::ICEORYX_V2) {
-        _comm_v2.emplace(id);
+        _iox2_root = iox2_root;
+        _create_iox2_root();
+        _comm_v2.emplace(id, _iox2_root);
 #endif
       } else {
         abort();
       }
 
     }
+
+    ~Client();
 
     executor::Invocation& request()
     {
@@ -543,6 +553,9 @@ namespace mignificient { namespace orchestrator {
 
   private:
     void _kill(const char* what, const std::function<void(ActiveInvocation&)>& reply);
+    void _create_iox2_root();
+
+    std::string _iox2_root;
 
     Context _event_context;
 

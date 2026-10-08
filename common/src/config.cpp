@@ -94,6 +94,17 @@ namespace mignificient { namespace ipc {
       }
     }
 
+    if (ipc.isMember("client-root-base")) {
+      ipc_config.client_root_base = ipc["client-root-base"].asString();
+      // ',' would break the container's --mount option.
+      if (ipc_config.client_root_base.empty() || ipc_config.client_root_base[0] != '/' ||
+          ipc_config.client_root_base.find(',') != std::string::npos ||
+          ipc_config.client_root_base.size() > MAX_CLIENT_ROOT_BASE_LEN) {
+        throw std::runtime_error("ipc.client-root-base must be an absolute path without ',' of at most " +
+                                 std::to_string(MAX_CLIENT_ROOT_BASE_LEN) + " characters");
+      }
+    }
+
     const char* env_gpuless_req = std::getenv("MIGNIFICIENT_GPULESS_REQUEST_SIZE");
     const char* env_gpuless_resp = std::getenv("MIGNIFICIENT_GPULESS_RESPONSE_SIZE");
 

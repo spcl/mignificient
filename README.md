@@ -25,11 +25,9 @@ That option only affects the compiler check: `gpuless/CMakeLists.txt` sets `CMAK
 
 ```
 CUDA=/path/to/cuda-11.6                     # e.g. /opt/cuda/cuda-11.6
-# pinned iceoryx2 v0.8.1, installed into build-cu116/iox2-install (needs git, cargo, cmake)
-git clone --depth 1 --branch v0.8.1 https://github.com/eclipse-iceoryx/iceoryx2.git build-cu116/iox2-src
-cmake -S build-cu116/iox2-src -B build-cu116/iox2-build -DCMAKE_BUILD_TYPE=Release -DBUILD_CXX=ON \
-  -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX=$PWD/build-cu116/iox2-install
-cmake --build build-cu116/iox2-build -j16 && cmake --install build-cu116/iox2-build
+# pinned and patched iceoryx2 (version and patch in external/), installed into build-cu116/iox2-install
+# (needs git, cargo, cmake)
+external/iceoryx2-build.sh build-cu116/iox2-src build-cu116/iox2-build $PWD/build-cu116/iox2-install
 export PATH=$CUDA/bin:$PATH
 cmake -S . -B build-cu116 -DCMAKE_BUILD_TYPE=Release -DBUILD_ICEORYX2=TRUE -DCMAKE_CUDA_ARCHITECTURES=86 \
   -DCMAKE_CUDA_COMPILER=$CUDA/bin/nvcc -DCUDAToolkit_ROOT=$CUDA \
@@ -39,6 +37,10 @@ cmake -S . -B build-cu116 -DCMAKE_BUILD_TYPE=Release -DBUILD_ICEORYX2=TRUE -DCMA
   -DCMAKE_PREFIX_PATH=$PWD/build-cu116/iox2-install
 cmake --build build-cu116 -j16
 ```
+
+iceoryx2 is v0.8.1 with `external/iceoryx2-file-backend.patch`: its `ipc` service keeps data segments, dynamic configs and connections as files under the config's `global.root-path` instead of POSIX shared memory in `/dev/shm`.
+The orchestrator gives every client its own root, `<ipc.client-root-base>/<16 hex digits of a hash of the client id>` (mode 0700; default base `/dev/shm/mignificient`, a tmpfs, at most 39 characters because the event sockets in the root must fit a 107-byte unix socket path). The orchestrator log prints each client's directory. The gpuless server and the executor get the root in `MIGNIFICIENT_IOX2_ROOT`; gpuless also keeps its memcpy chunks there. A container mounts only that directory (plus the read-only `~/.config/iceoryx2` config), and the directory is removed when the client goes away (timeout, OOM, startup failure, admin kill, orchestrator shutdown).
+The executor image must be built from the same patched iceoryx2 (`docker/Dockerfile.iceoryx` runs the same script). A process built against unpatched iceoryx2 looks for the data in `/dev/shm` and never finds the other side's services.
 
 pybind11 is header-only and its CMake config does not depend on the Python version, so `pybind11_DIR` can come from any installed pybind11 (the build used one from a Python 3.10 site-packages).
 `-DPython_EXECUTABLE` alone selects the Python for the `_mignificient` executor module; its version must match the interpreter that runs the functions (3.9 for the conda environments used with the container image).

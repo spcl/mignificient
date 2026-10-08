@@ -2,6 +2,8 @@
 #define MIGNIFICIENT_IPC_CONFIG_HPP
 
 #include <cstddef>
+#include <cstdio>
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <json/value.h>
@@ -44,13 +46,19 @@ struct IPCConfig {
     std::unordered_map<std::string, BufferConfig> buffer_configs;
     PollingMode polling_mode;
     uint32_t poll_interval_us;
+    // iceoryx2: each client gets its own iceoryx2 root directory under this base (client_root()).
+    std::string client_root_base;
+    // The client's event sockets live in its root, and a unix socket path has at most 107 bytes:
+    // <root>/iox2_<u128>.event leaves 56 for the root, so 39 for the base.
+    static constexpr size_t MAX_CLIENT_ROOT_BASE_LEN = 39;
 
     static IPCBackend convert_ipc_backend(std::string_view value);
 
     IPCConfig():
       backend(IPCBackend::ICEORYX_V1),
       polling_mode(PollingMode::WAIT),
-      poll_interval_us(100)
+      poll_interval_us(100),
+      client_root_base("/dev/shm/mignificient")
     {
       // Default buffer configurations
       buffer_configs["orchestrator-executor"] = BufferConfig(1048576, 5242880, 10);
@@ -59,6 +67,15 @@ struct IPCConfig {
     }
 
     static IPCConfig from_json(const Json::Value& config);
+
+    // <base>/<16 hex digits of a hash of the client id>. Not the id itself: with user and function
+    // names in it, the socket paths would cap the names at a few dozen characters.
+    std::string client_root(const std::string& client_id) const
+    {
+      char name[17];
+      snprintf(name, sizeof(name), "%016zx", std::hash<std::string>{}(client_id));
+      return client_root_base + "/" + name;
+    }
 
     static std::string backend_string(IPCBackend backend)
     {
