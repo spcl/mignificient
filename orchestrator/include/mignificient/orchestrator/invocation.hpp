@@ -165,6 +165,8 @@ namespace mignificient { namespace orchestrator {
 
       _mig_instance = input_data["mig-instance"].asString();
       _gpu_memory = input_data["gpu-memory"].asInt();
+      // Optional CPU cap of the function's executor (cores, fractions allowed); 0: none.
+      _cpu_cores = input_data.get("cpu-cores", 0).asFloat();
 
       _timeout_us = static_cast<int64_t>(input_data["timeout"].asDouble() * 1e6);
     }
@@ -287,6 +289,11 @@ namespace mignificient { namespace orchestrator {
       return _gpu_memory;
     }
 
+    float cpu_cores() const
+    {
+      return _cpu_cores;
+    }
+
     void mark_started()
     {
       _dispatch_time = std::chrono::high_resolution_clock::now();
@@ -353,6 +360,7 @@ namespace mignificient { namespace orchestrator {
     std::string _mig_instance;
     std::string _uuid;
     float _gpu_memory;
+    float _cpu_cores;
     int64_t _timeout_us = 0;
     decltype(std::chrono::high_resolution_clock::now()) _dispatch_time;
     std::array<std::string, 5> _modules;

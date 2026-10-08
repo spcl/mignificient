@@ -132,6 +132,7 @@ namespace mignificient { namespace orchestrator {
     if(_executor) {
       _executor->stop();
     }
+    _cgroup.remove();
 #ifdef MIGNIFICIENT_WITH_ICEORYX2
     if(_comm_v2) {
       // Close our ports and node first, then drop everything the client's processes left behind.

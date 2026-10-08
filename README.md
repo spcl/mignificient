@@ -130,6 +130,31 @@ The executor image: `docker build -f docker/Dockerfile.iceoryx -t spcleth/mignif
 `docker build -f docker/Dockerfile --build-arg ICEORYX_IMAGE=spcleth/mignificient:iceoryx-local -t spcleth/mignificient:executor-local .`
 (`executor.container-executor.image` in the config). Pull or build it on every node before starting the orchestrator.
 
+### CPU cap
+
+With `executor.cpu-cap` enabled (default: false, then `cpu-cores` is ignored), a client's first request may set
+`"cpu-cores": <float>` (default 0: no cap) to limit its executor's CPU time:
+
+* bare-metal: a cgroup v2 per client under `executor.cgroup-root` with `cpu.max` set to the cap. It holds the
+  executor and, unless `executor.cgroup-include-gpuless` is false, its gpuless server. If `cgroup-root` is empty or
+  the cgroup can't be created, the client fails to start.
+* container: `docker run --cpus`; the gpuless server runs on the host and is not capped.
+* both: `OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS` and `OPENCV_FOR_THREADS_NUM` are set to the
+  cap (rounded up), so thread pools size themselves to it.
+
+The orchestrator must be able to move processes into the cgroups, i.e., it must run inside a delegated cgroup
+subtree. Prepare it once per boot with `tools/setup-cgroup.sh [config.json]`, which also writes `cgroup-root` and
+`cpu-cap: true` into the config:
+
+```
+# desktop session (shell inside user@UID.service), no root needed
+tools/setup-cgroup.sh ${BUILD_DIR}/config/orchestrator.json
+# ssh session: creates /sys/fs/cgroup/mignificient-$USER and moves this shell into it
+sudo tools/setup-cgroup.sh --pid $$ ${BUILD_DIR}/config/orchestrator.json
+```
+
+Then start the orchestrator from that shell.
+
 ### Tests
 
 `ctest -L integration --output-on-failure` in the build directory (needs a GPU; the ResNet-50 tests pack a package

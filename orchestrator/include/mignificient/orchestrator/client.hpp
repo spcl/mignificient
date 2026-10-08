@@ -14,6 +14,7 @@
 
 #include <mignificient/executor/executor.hpp>
 #include <mignificient/orchestrator/event.hpp>
+#include <mignificient/orchestrator/cgroup.hpp>
 #include <mignificient/orchestrator/executor.hpp>
 #include <mignificient/orchestrator/invocation.hpp>
 #include <mignificient/ipc/config.hpp>
@@ -418,6 +419,11 @@ namespace mignificient { namespace orchestrator {
       _executor = std::move(executor);
     }
 
+    void set_cgroup(CpuCgroup&& cgroup)
+    {
+      _cgroup = std::move(cgroup);
+    }
+
     void add_invocation(std::unique_ptr<ActiveInvocation> && invoc)
     {
       SPDLOG_DEBUG("[Client] For client {} add a new invocation {}", _id, invoc->uuid());
@@ -588,6 +594,7 @@ namespace mignificient { namespace orchestrator {
     GPUlessServer _gpuless_server;
     GPUInstance* _gpu_instance;
     std::unique_ptr<Executor> _executor;
+    CpuCgroup _cgroup;
 
     ClientStatus _status = ClientStatus::NOT_ACTIVE;
 

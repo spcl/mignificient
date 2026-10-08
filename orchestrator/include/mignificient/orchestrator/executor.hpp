@@ -1,6 +1,7 @@
 #ifndef __MIGNIFICIENT_ORCHESTRATOR_EXECUTOR_HPP__
 #define __MIGNIFICIENT_ORCHESTRATOR_EXECUTOR_HPP__
 
+#include <cmath>
 #include <array>
 #include <csignal>
 #include <cstring>
@@ -213,6 +214,11 @@ namespace mignificient { namespace orchestrator {
         return _pid;
       }
 
+      void set_cpu_cores(float cores)
+      {
+        _cpu_cores = cores;
+      }
+
 
   protected:
       void _configure_backends(Environment& env);
@@ -227,6 +233,16 @@ namespace mignificient { namespace orchestrator {
       }
       std::vector<std::string> temporary_envs;
 
+      // With a CPU cap, thread pools see it: OpenMP (PyTorch), BLAS, OpenCV. Advisory, the quota enforces it.
+      std::vector<std::pair<std::string, std::string>> _thread_envs() const
+      {
+        if(_cpu_cores <= 0) {
+          return {};
+        }
+        std::string n = std::to_string(std::max(1, static_cast<int>(std::ceil(_cpu_cores))));
+        return {{"OMP_NUM_THREADS", n}, {"MKL_NUM_THREADS", n}, {"OPENBLAS_NUM_THREADS", n}, {"OPENCV_FOR_THREADS_NUM", n}};
+      }
+
       const ipc::IPCConfig& _ipc_config;
       std::string _user;
       std::optional<std::string> _ld_preload;
@@ -238,6 +254,7 @@ namespace mignificient { namespace orchestrator {
       // Set for container executors; `_user` is the client id.
       ContainerWorker* _worker = nullptr;
       std::string _container_id;
+      float _cpu_cores = 0;
   };
 
   class BareMetalExecutorCpp : public Executor {

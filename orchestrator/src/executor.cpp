@@ -161,6 +161,13 @@ namespace mignificient { namespace orchestrator {
     if(cpu_idx != -1) {
       envs.add(const_cast<char*>(cpu_idx_str.c_str()));
     }
+    std::vector<std::string> thread_envs;
+    for(const auto& [key, val] : _thread_envs()) {
+      thread_envs.push_back(key + "=" + val);
+    }
+    for(auto& e : thread_envs) {
+      envs.add(e.data());
+    }
 
     _configure_backends(envs);
 
@@ -236,6 +243,9 @@ namespace mignificient { namespace orchestrator {
 
     if(cpu_idx != -1) {
       spec.env.emplace_back("CPU_BIND_IDX", std::to_string(cpu_idx));
+    }
+    for(auto& kv : _thread_envs()) {
+      spec.env.push_back(std::move(kv));
     }
 
     // Models live in the package: TORCH_HOME=<pkg>/<torch-home> (read-only in containers).
@@ -325,7 +335,8 @@ namespace mignificient { namespace orchestrator {
     const std::optional<std::string>& iox2_root,
     const std::string& iox2_config_file,
     const std::vector<std::pair<std::string, std::string>>& env_vars,
-    const std::vector<std::string>& cmd
+    const std::vector<std::string>& cmd,
+    float cpu_cores
   )
   {
     std::vector<std::string> args = {
@@ -345,6 +356,11 @@ namespace mignificient { namespace orchestrator {
       return v;
     }();
     args.insert(args.end(), {"--sysctl", fmt::format("net.unix.max_dgram_qlen={}", dgram_qlen)});
+
+    // CPU cap of the function (the gpuless server runs on the host, outside it).
+    if(cpu_cores > 0) {
+      args.insert(args.end(), {"--cpus", fmt::format("{}", cpu_cores)});
+    }
 
     // --mount, not -v: ':' in the path is fine, and a missing source fails the start instead of being created.
     if(code_package.has_value()) {
@@ -415,8 +431,11 @@ namespace mignificient { namespace orchestrator {
     if(cpu_idx != -1) {
       env_vars.emplace_back("CPU_BIND_IDX", std::to_string(cpu_idx));
     }
+    for(auto& kv : _thread_envs()) {
+      env_vars.push_back(std::move(kv));
+    }
 
-    _worker->start(_user, _container_argv(_container_runtime, _image, _code_package, _iox2_root(), _ipc_config.iox2_config_file, env_vars, {_cpp_executor}));
+    _worker->start(_user, _container_argv(_container_runtime, _image, _code_package, _iox2_root(), _ipc_config.iox2_config_file, env_vars, {_cpp_executor}, _cpu_cores));
     return true;
   }
 
@@ -424,7 +443,7 @@ namespace mignificient { namespace orchestrator {
   {
     LaunchSpec spec = python_launch(poll_sleep, cpu_idx);
 
-    _worker->start(_user, _container_argv(_container_runtime, _image, _code_package, _iox2_root(), _ipc_config.iox2_config_file, spec.env, spec.argv));
+    _worker->start(_user, _container_argv(_container_runtime, _image, _code_package, _iox2_root(), _ipc_config.iox2_config_file, spec.env, spec.argv, _cpu_cores));
     return true;
   }
 

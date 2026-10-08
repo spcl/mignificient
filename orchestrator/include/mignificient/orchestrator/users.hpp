@@ -20,9 +20,18 @@ namespace mignificient { namespace orchestrator {
       _config(config),
       _gpu_manager(gpu_manager),
       _ipc_config(ipc_config),
-      _container_worker(container_worker)
+      _container_worker(container_worker),
+      _cpu_cap(config.get("cpu-cap", false).asBool()),
+      _cgroup_root(config.get("cgroup-root", "").asString())
     {
-
+      if(!_cpu_cap) {
+        spdlog::info("CPU cap disabled (executor.cpu-cap): requests' cpu-cores are ignored");
+      } else if(_cgroup_root.empty()) {
+        spdlog::info("CPU cap enabled for containers only: executor.cgroup-root is empty, bare-metal clients with cpu-cores fail to start");
+      } else if(!CpuCgroup::prepare_root(_cgroup_root)) {
+        spdlog::critical("executor.cgroup-root {} is not usable (run tools/setup-cgroup.sh)", _cgroup_root);
+        std::exit(EXIT_FAILURE);
+      }
     }
 
     std::tuple<Client*, bool> process_invocation(std::unique_ptr<ActiveInvocation> && invocation)
@@ -329,6 +338,7 @@ namespace mignificient { namespace orchestrator {
       bool use_container = invocation->executor().value_or(_config["type"].asString()) == "container";
       spdlog::info("Allocate client {} with {} executor{}", client_id, use_container ? "container" : "bare-metal",
                    _ipc_config.backend == ipc::IPCBackend::ICEORYX_V2 ? ", iceoryx2 directory " + _ipc_config.client_root(client_id) : "");
+      float cpu_cores = _cpu_cap ? invocation->cpu_cores() : 0;
 
       // GPUless server always runs bare-metal on the host
       GPUlessServer gpuless_server;
@@ -353,6 +363,7 @@ namespace mignificient { namespace orchestrator {
             invocation->gpu_memory(), *selected_gpu, _config["container-executor"],
             invocation->ld_preload(), invocation->code_package(), _container_worker, container_runtime
           );
+          exec->set_cpu_cores(cpu_cores);
           started = exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx) && started;
 
           executor = std::move(exec);
@@ -364,6 +375,7 @@ namespace mignificient { namespace orchestrator {
             invocation->gpu_memory(), *selected_gpu, _config["container-executor"],
             invocation->ld_preload(), invocation->code_package(), _container_worker, container_runtime
           );
+          exec->set_cpu_cores(cpu_cores);
           started = exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx) && started;
 
           executor = std::move(exec);
@@ -378,6 +390,7 @@ namespace mignificient { namespace orchestrator {
             invocation->gpu_memory(), *selected_gpu, _config["bare-metal-executor"],
             invocation->ld_preload()
           );
+          exec->set_cpu_cores(cpu_cores);
           started = exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx) && started;
 
           executor = std::move(exec);
@@ -390,11 +403,30 @@ namespace mignificient { namespace orchestrator {
             _config["bare-metal-executor"],
             invocation->ld_preload(), invocation->code_package()
           );
+          exec->set_cpu_cores(cpu_cores);
           started = exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx) && started;
 
           executor = std::move(exec);
         }
 
+      }
+
+      // CPU cap, bare-metal: one cgroup with the executor and (cgroup-include-gpuless) its gpuless server. Containers
+      // get --cpus; their gpuless server stays outside.
+      // processes are moved in right after the spawn, so their first instructions run uncapped;
+      // clone3(CLONE_INTO_CGROUP) if that ever matters.
+      if(started && !use_container && cpu_cores > 0 && _cgroup_root.empty()) {
+        spdlog::critical("Client {} requests cpu-cores {} but executor.cgroup-root is empty (run tools/setup-cgroup.sh)", client_id, cpu_cores);
+        started = false;
+      } else if(started && !use_container && cpu_cores > 0) {
+        CpuCgroup cgroup;
+        bool capped = cgroup.create(_cgroup_root, fmt::format("{}-{}", getpid(), client_id), cpu_cores) &&
+          cgroup.add(executor->pid()) &&
+          (!_config.get("cgroup-include-gpuless", true).asBool() || cgroup.add(gpuless_server.pid()));
+        if(!capped) {
+          started = false;
+        }
+        selected_client->set_cgroup(std::move(cgroup));
       }
 
       if(!started) {
@@ -413,6 +445,11 @@ namespace mignificient { namespace orchestrator {
     GPUManager& _gpu_manager;
     const ipc::IPCConfig& _ipc_config;
     ContainerWorker& _container_worker;
+
+    // executor.cpu-cap: false ignores the requests' cpu-cores.
+    bool _cpu_cap;
+    // Parent of the per-client CPU-cap cgroups (bare-metal); required for bare-metal clients with cpu-cores.
+    std::string _cgroup_root;
 
     int _index = 0;
     // TODO: this might require extension to support platforms where hyperthreads have consecutive IDs
