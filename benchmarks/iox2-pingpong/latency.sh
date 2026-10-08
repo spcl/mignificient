@@ -32,7 +32,7 @@ trap cleanup EXIT
 
 run_host() { # label bin root busy
   echo -n "$1: "
-  IOX2_ROOT=$3 BUSY=$4 taskset -c "$PONG_CPU" "$2" pong &
+  IOX2_ROOT=$3 BUSY=$4 taskset -c "$PONG_CPU" timeout 150 "$2" pong &
   PONG=$!
   sleep 0.3
   IOX2_ROOT=$3 BUSY=$4 taskset -c "$PING_CPU" timeout 120 "$2" ping "$N"
@@ -46,10 +46,10 @@ run_container() { # label root busy  (file backend only: the container sees noth
   dir=$(dirname "$FILE_BIN")
   docker run --rm -d --label "$LABEL" --user "$(id -u):$(id -g)" --cpuset-cpus "$PONG_CPU" \
     --mount "type=bind,source=${2%/},target=${2%/}" -v "$dir:/pp:ro" -e IOX2_ROOT="$2" -e IOX2_PREFIX ${3:+-e BUSY=1} \
-    "$IMAGE" /pp/pingpong pong >/dev/null || return
+    "$IMAGE" timeout 150 /pp/pingpong pong >/dev/null || return
   sleep 1.5
   IOX2_ROOT=$2 BUSY=$3 taskset -c "$PING_CPU" timeout 120 "$FILE_BIN" ping "$N"
-  sleep 0.5
+  docker wait $(docker ps -q --filter "label=$LABEL") >/dev/null 2>&1 # pong gone before the next rep reuses the root
 }
 
 mkdir -p "$BASE/file" "$BASE/posix"
