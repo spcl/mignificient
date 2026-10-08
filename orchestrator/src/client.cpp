@@ -172,47 +172,8 @@ namespace mignificient { namespace orchestrator {
 
   void Client::oom_kill()
   {
-    auto kill_start = std::chrono::high_resolution_clock::now();
-
-    _status = ClientStatus::NOT_ACTIVE;
-
-    // Kill executor (process or container)
-    _executor->stop();
-
-    // Gpuless should be exiting on its own; if it hasn't yet, force kill
-    if (!_gpuless_server.exited()) {
-      _gpuless_server.stop();
-    }
-    gpu_instance()->remove_pending_invocations(this);
-
-    auto kill_end = std::chrono::high_resolution_clock::now();
-    double kill_time_us = std::chrono::duration<double, std::micro>(kill_end - kill_start).count();
-    spdlog::info("[KillStats] oom_kill for {}: {:.1f} us ({:.3f} ms)",
-                 _id, kill_time_us, kill_time_us / 1000.0);
-
-    // Respond with OOM error to active invocation
-    if (_active_invocation) {
-      _active_invocation->respond_oom();
-      auto tmp = std::move(_active_invocation);
-      _active_invocation = nullptr;
-      gpu_instance()->finish_current_invocation(tmp.get());
-    }
-
-    // Respond with OOM error to finished invocation waiting for HTTP reply
-    if (_finished_invocation) {
-      _finished_invocation->respond_oom();
-      _finished_invocation = nullptr;
-    }
-
-    // Drain pending invocations with OOM error
-    while (!_pending_invocations.empty()) {
-      auto inv = std::move(_pending_invocations.front());
-      _pending_invocations.pop();
-      inv->respond_oom();
-    }
-
-    // Unregister executor from GPU instance
-    gpu_instance()->close_executor(_executor.get());
+    // Same as the other kills (container executors are stopped through the worker), with an OOM reply.
+    _kill("oom_kill", [](ActiveInvocation& inv) { inv.respond_oom(); });
   }
 
   void Client::timeout_kill()
