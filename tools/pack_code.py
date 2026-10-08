@@ -59,7 +59,11 @@ CUBIN_LIBS = [
         "libcudnn_ops_infer.so.8",
         "libcudnn_adv_infer.so.8",
     )
-] + ["lib/libcublas.so.11", "lib/libcublasLt.so.11"]
+] + [
+    "lib/libcublas.so.11",
+    "lib/libcublasLt.so.11",
+    "lib/python3.9/site-packages/torchvision/_C.so",
+]  # torchvision ops: nms, roi_align, deform_conv2d
 CUBIN_CACHE = Path.home() / ".cache" / "mignificient" / "cubin"
 
 
