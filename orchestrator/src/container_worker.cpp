@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <sstream>
 #include <utility>
 
 #include <spdlog/spdlog.h>
@@ -97,6 +98,12 @@ namespace mignificient { namespace orchestrator {
     }
   }
 
+  void ContainerWorker::unwatch(const std::string& client_id)
+  {
+    std::lock_guard<std::mutex> lock{_mutex};
+    _unwatched.insert(client_id);
+  }
+
   std::vector<ContainerStartResult> ContainerWorker::drain()
   {
     std::lock_guard<std::mutex> lock{_mutex};
@@ -154,8 +161,15 @@ namespace mignificient { namespace orchestrator {
     auto [status, output] = _run(command);
     double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - begin).count();
 
-    // `run -d` prints the id last; anything before it is a warning or pull progress.
-    std::string id = output.substr(output.find_last_of('\n') + 1);
+    // `run -d` prints the id (64 hex digits) on its own line, usually the last; other lines are warnings or
+    // pull progress. Without a valid id we couldn't stop the container, so it counts as a failed start.
+    std::string id, line;
+    std::istringstream lines{output};
+    while(std::getline(lines, line)) {
+      if(line.size() == 64 && line.find_first_not_of("0123456789abcdef") == std::string::npos) {
+        id = line;
+      }
+    }
     ContainerStartResult result{job.id, std::nullopt, ""};
     if(status != 0 || id.empty()) {
       result.error = output.empty() ? fmt::format("exit status {}", status) : output;
@@ -198,9 +212,14 @@ namespace mignificient { namespace orchestrator {
 
   void ContainerWorker::_poll_watched()
   {
+    std::set<std::string> registered;
+    {
+      std::lock_guard<std::mutex> lock{_mutex};
+      registered.swap(_unwatched);
+    }
     auto now = std::chrono::steady_clock::now();
     _watched.erase(
-      std::remove_if(_watched.begin(), _watched.end(), [&](const auto& w) { return w.until < now; }),
+      std::remove_if(_watched.begin(), _watched.end(), [&](const auto& w) { return w.until < now || registered.count(w.client_id); }),
       _watched.end()
     );
     if(_watched.empty()) {

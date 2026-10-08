@@ -42,6 +42,8 @@ namespace mignificient { namespace orchestrator {
     // Stop a client whose start has not finished: a queued start is dropped, a running one
     // is killed as soon as `run` returns. Its result is not reported.
     void cancel(const std::string& client_id);
+    // The client's executor registered: stop watching its container.
+    void unwatch(const std::string& client_id);
 
     std::vector<ContainerStartResult> drain();
 
@@ -72,6 +74,7 @@ namespace mignificient { namespace orchestrator {
     std::vector<Watched> _watched;       // worker thread only
     std::string _running_start;          // client id of the start in progress
     std::set<std::string> _cancelled;    // cancelled while their start was running
+    std::set<std::string> _unwatched;    // registered, to drop from _watched
     bool _quit = false;
 
     std::thread _thread;

@@ -512,6 +512,9 @@ namespace mignificient { namespace orchestrator {
     bool executor_active()
     {
       _executor_active = true;
+      if(_executor) {
+        _executor->registered();
+      }
 
       _active = _gpuless_active && _executor_active;
       return _active;

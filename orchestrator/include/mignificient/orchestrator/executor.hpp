@@ -58,6 +58,7 @@ namespace mignificient { namespace orchestrator {
       return false;
     }
 
+
   private:
     pid_t _pid = -1;
   };
@@ -157,6 +158,14 @@ namespace mignificient { namespace orchestrator {
           return true;
         }
         return false;
+      }
+
+      // The executor registered: a container no longer needs the early-death watch.
+      void registered()
+      {
+        if(_worker) {
+          _worker->unwatch(_user);
+        }
       }
 
       bool is_container() const

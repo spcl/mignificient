@@ -56,6 +56,15 @@ namespace mignificient { namespace orchestrator {
     }
   }
 
+  static int _startup_timeout_ms(const Json::Value& executor_config)
+  {
+    const auto& v = executor_config.get("startup-timeout-ms", 30000);
+    if(!v.isIntegral() || v.asInt64() <= 0 || v.asInt64() > 3600000) {
+      throw std::runtime_error("executor.startup-timeout-ms must be an integer in [1, 3600000]");
+    }
+    return v.asInt();
+  }
+
   static void _handle_swap_confirm(int msg, Client* client)
   {
     auto swap_data = client->read_swap_result();
@@ -309,7 +318,7 @@ namespace mignificient { namespace orchestrator {
   }
 
   Orchestrator::Orchestrator(const Json::Value& config, const std::string& device_db_path):
-    _startup_timeout(config["executor"].get("startup-timeout-ms", 30000).asInt()),
+    _startup_timeout(_startup_timeout_ms(config["executor"])),
     _container_worker(config["executor"].get("container-runtime", "docker").asString(), _startup_timeout.count()),
     _gpu_manager(device_db_path, sharing_model(config["sharing-model"].asString())),
     _users(_gpu_manager, config["executor"], _ipc_config, _container_worker)
