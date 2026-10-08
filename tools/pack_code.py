@@ -53,13 +53,14 @@ def has_dynamic_cudart(lib: Path) -> bool:
     return re.search(r"\(NEEDED\).*\[libcudart\.so", r.stdout) is not None
 
 
-def copy_code(src: Path, pkg: Path):
-    src = src.resolve()
+def check_reserved(src: Path):
     for reserved in ("env", "package.json"):
         if (src / reserved).exists():
-            raise SystemExit(
-                f"Error: '{reserved}' is reserved in the package; remove it from '{src}'"
-            )
+            raise SystemExit(f"Error: '{reserved}' is reserved in the package; remove it from '{src}'")
+
+
+def copy_code(src: Path, pkg: Path):
+    src = src.resolve()
     skip = shutil.ignore_patterns(".git", "__pycache__", "*.pyc")
 
     def ignore(
@@ -126,7 +127,7 @@ def pack(
 ) -> Path:
     if not src.is_dir():
         raise SystemExit(f"Error: source directory '{src}' does not exist")
-    name = name or src.resolve().name
+    name = src.resolve().name if name is None else name
     if lang == "cpp" and not (so and (src / so).is_file()):
         raise SystemExit(
             f"Error: function .so '{so}' not found in '{src}' (use --so FILE)"
@@ -136,7 +137,11 @@ def pack(
             f"Error: unknown runtime '{runtime}', known: {', '.join(RUNTIMES)}"
         )
 
+    if name in ("", ".", "..") or name != Path(name).name:
+        raise SystemExit(f"Error: invalid package name '{name}'")
+    check_reserved(src)
     pkg = (dest / name).resolve()
+    assert pkg.parent == dest.resolve(), pkg  # never rmtree outside dest
     if pkg.exists():
         if not force:
             raise SystemExit(f"Error: '{pkg}' exists (use --force to replace it)")
