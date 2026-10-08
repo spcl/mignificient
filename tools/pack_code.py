@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Pack a function: <dest>/<name>/{code, env/ (python), package.json}.
+"""Pack a function: <dest>/<name>/{code, env/ (python), torch-cache/ (python), package.json}.
+
+Layout of the source dir (all optional except the handler code): requirements.txt (pip, python only),
+prepare.py (python only). prepare.py runs at pack time with <pkg>/env/bin/python, cwd=<pkg>,
+TORCH_HOME=<pkg>/torch-cache; it downloads/saves model weights (torchvision/torch.hub downloads land
+in torch-cache). Packing then lists every model file (path relative to the package, size), checks that
+each *.pt/*.pth loads with torch.load, and fails if prepare.py produced no model file. At runtime the
+orchestrator sets TORCH_HOME=<pkg>/<package.json "torch-home">. prepare.py itself is copied like any file.
 
 Python packages carry a full conda env with *dynamically linked* conda PyTorch;
 pip torch wheels statically link cudart and break gpuless LD_PRELOAD interception.
@@ -18,14 +25,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-RUNTIMES = {
-    "torch-1.12.1-cu116": [
-        "python=3.9",
-        "pytorch=1.12.1",
-        "torchvision",
-        "cudatoolkit=11.6",
-    ]
-}
+RUNTIMES = {"torch-1.12.1-cu116": ["python=3.9", "pytorch=1.12.1", "torchvision", "cudatoolkit=11.6", "numpy<2"]}  # torch 1.12 breaks with numpy 2
 CHANNELS = ["pytorch", "conda-forge"]  # cudatoolkit 11.6 lives on conda-forge
 TORCH_LIB = "lib/python3.9/site-packages/torch/lib/libc10_cuda.so"
 
@@ -73,6 +73,48 @@ def copy_code(src: Path, pkg: Path):
     shutil.copytree(src, pkg, symlinks=True, ignore=ignore, dirs_exist_ok=True)
 
 
+LOAD_CHECK = """
+import sys, torch
+bad = 0
+for f in sys.argv[1:]:
+    try:
+        torch.load(f, map_location="cpu")
+    except Exception as e:
+        print("FAILED to load %s: %s: %s" % (f, type(e).__name__, e)); bad += 1
+sys.exit(1 if bad else 0)
+"""
+
+
+def prepare_and_verify(pkg: Path, python: str):
+    """Run <pkg>/prepare.py (if any), then list and verify the package's models."""
+    cache = pkg / "torch-cache"
+    cache.mkdir(exist_ok=True)
+    prep = pkg / "prepare.py"
+    if prep.is_file():
+        r = subprocess.run([python, "prepare.py"], cwd=pkg, env={**os.environ, "TORCH_HOME": str(cache)})
+        if r.returncode != 0:
+            raise SystemExit(f"Error: prepare.py failed (exit {r.returncode})")
+    files = {f for f in cache.rglob("*") if f.is_file()}
+    files |= {f for ext in ("*.pt", "*.pth") for f in pkg.rglob(ext)
+              if f.is_file() and not f.is_relative_to(pkg / "env")}
+    if not files:
+        if prep.is_file():
+            raise SystemExit("Error: prepare.py produced no model files under torch-cache/ or the package")
+        print("no models packaged")
+        return
+    total = 0
+    for f in sorted(files):
+        total += f.stat().st_size
+        print(f"model: {f.relative_to(pkg)}  {f.stat().st_size / 1e6:.1f} MB")
+    print(f"models: {len(files)} files, {total / 1e6:.1f} MB total in {pkg}")
+    loadable = sorted(str(f) for f in files if f.suffix in (".pt", ".pth"))
+    if loadable:
+        r = subprocess.run([python, "-c", LOAD_CHECK, *loadable], capture_output=True, text=True)
+        if r.returncode != 0:
+            raise SystemExit("Error: model not loadable with torch.load:\n" + r.stdout.strip() + r.stderr[-500:])
+        print(f"verified: {len(loadable)} .pt/.pth files load with torch.load")
+
+
 def build(src, lang, pkg, runtime, so, conda_exe):
     if lang == "python":
         # conda wants to create the prefix itself, so env goes first, code copied over after
@@ -112,7 +154,11 @@ def build(src, lang, pkg, runtime, so, conda_exe):
     }
     if lang == "cpp":
         meta["function-file"] = so
+    if lang == "python":
+        meta["torch-home"] = "torch-cache"
     (pkg / "package.json").write_text(json.dumps(meta, indent=2) + "\n")
+    if lang == "python":
+        prepare_and_verify(pkg, str(pkg / "env/bin/python"))
 
 
 def pack(
