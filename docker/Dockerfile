@@ -61,3 +61,9 @@ COPY --from=builder /opt/cudnn-8.9.7/lib/libcudnn.so.8* /opt/cuda-11.6/lib64/
 # No /opt/cudnn: function packages bring their own.
 ENV LD_LIBRARY_PATH="/opt/cuda-11.6/lib64:/opt/cuda-11.6/lib64/stubs"
 WORKDIR /code
+
+# Fail the build if a runtime dependency is missing.
+RUN for f in /opt/mignificient/build/gpuless/libgpuless.so /opt/mignificient/build/executor/bin/executor_cpp \
+      /opt/mignificient/build/executor/libexecutor_lib.so /opt/mignificient/build/executor/mignificient/_mignificient*.so; do \
+      if ldd "$f" | grep -q "not found"; then ldd "$f"; exit 1; fi; done
+RUN PYTHONPATH=/opt/mignificient/build/executor python3.9 -c "import mignificient"
