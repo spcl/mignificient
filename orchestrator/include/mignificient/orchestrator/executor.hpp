@@ -2,16 +2,21 @@
 #define __MIGNIFICIENT_ORCHESTRATOR_EXECUTOR_HPP__
 
 #include <array>
+#include <csignal>
 #include <cstring>
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
+#include <vector>
+#include <sys/wait.h>
 
 #include <spdlog/spdlog.h>
 #include <spdlog/fmt/bundled/core.h>
 #include <json/value.h>
 
 #include <mignificient/ipc/config.hpp>
+#include <mignificient/orchestrator/container_worker.hpp>
 
 extern "C" char **environ;
 
@@ -43,8 +48,34 @@ namespace mignificient { namespace orchestrator {
 
     pid_t pid() const { return _pid; }
 
+    // Reaps the server if it has exited; the pid is then forgotten, so it's never signalled.
+    bool exited()
+    {
+      if(_pid > 0 && waitpid(_pid, &_status, WNOHANG) == _pid) {
+        _pid = -1;
+        return true;
+      }
+      return false;
+    }
+
+    // After exited(): killed by a signal or failed. A clean exit follows an OOM report.
+    bool crashed() const
+    {
+      return !(WIFEXITED(_status) && WEXITSTATUS(_status) == 0);
+    }
+
+    void stop()
+    {
+      if(_pid > 0) {
+        kill(_pid, SIGKILL);
+        waitpid(_pid, nullptr, 0);
+        _pid = -1;
+      }
+    }
+
   private:
-    pid_t _pid;
+    pid_t _pid = -1;
+    int _status = 0;
   };
 
   /**
@@ -108,13 +139,59 @@ namespace mignificient { namespace orchestrator {
         _user(user),
         _gpu_memory(gpu_memory),
         _ld_preload(ld_preload),
-        _pid(0),
+        _pid(-1),
         _function(function),
         _function_handler(function_handler),
         _device(device)
       {}
 
       virtual ~Executor() = default;
+
+      void stop()
+      {
+        if(_worker) {
+          // Container: the worker kills it, or cancels a start that hasn't finished.
+          if(!_container_id.empty()) {
+            _worker->stop(std::exchange(_container_id, ""));
+          } else {
+            _worker->cancel(_user);
+          }
+        }
+        // Never signal pid <= 0: kill(0) / kill(-1) hit our own process group / every process.
+        else if(_pid > 0) {
+          kill(_pid, SIGKILL);
+          waitpid(_pid, nullptr, 0);
+          _pid = -1;
+        }
+      }
+
+      // Bare metal: reaps the process if it has exited. Containers report exits through the worker.
+      bool exited()
+      {
+        if(_pid > 0 && waitpid(_pid, nullptr, WNOHANG) == _pid) {
+          _pid = -1;
+          return true;
+        }
+        return false;
+      }
+
+      // The executor registered: a container no longer needs the early-death watch.
+      void registered()
+      {
+        if(_worker) {
+          _worker->unwatch(_user);
+        }
+      }
+
+      bool is_container() const
+      {
+        return _worker != nullptr;
+      }
+
+      void set_container_id(const std::string& id)
+      {
+        _container_id = id;
+      }
 
       const std::optional<std::string>& ld_preload() const
       {
@@ -139,6 +216,15 @@ namespace mignificient { namespace orchestrator {
 
   protected:
       void _configure_backends(Environment& env);
+
+      // The client's own iceoryx2 directory (iceoryx2 backend only).
+      std::optional<std::string> _iox2_root() const
+      {
+        if(_ipc_config.backend != ipc::IPCBackend::ICEORYX_V2) {
+          return std::nullopt;
+        }
+        return _ipc_config.client_root(_user);
+      }
       std::vector<std::string> temporary_envs;
 
       const ipc::IPCConfig& _ipc_config;
@@ -149,6 +235,9 @@ namespace mignificient { namespace orchestrator {
       std::string _function;
       std::string _function_handler;
       GPUInstance& _device;
+      // Set for container executors; `_user` is the client id.
+      ContainerWorker* _worker = nullptr;
+      std::string _container_id;
   };
 
   class BareMetalExecutorCpp : public Executor {
@@ -175,11 +264,19 @@ namespace mignificient { namespace orchestrator {
     std::string _gpuless_lib;
   };
 
-  class BareMetalExecutorPython : public Executor {
-  public:
-    using Executor::Executor;
+  /**
+   * Argv + environment of an executor process. The bare-metal launcher spawns it,
+   * the container launcher passes it to `<runtime> run`.
+   */
+  struct LaunchSpec {
+    std::vector<std::string> argv;
+    std::vector<std::pair<std::string, std::string>> env;
+  };
 
-    BareMetalExecutorPython(
+  class ExecutorPython : public Executor {
+  public:
+
+    ExecutorPython(
         const ipc::IPCConfig& ipc_config,
         const std::string& user_id,
         const std::string& function,
@@ -190,7 +287,8 @@ namespace mignificient { namespace orchestrator {
         float gpu_memory,
         GPUInstance& device,
         const Json::Value& config,
-        std::optional<std::string> ld_preload
+        const std::optional<std::string>& ld_preload,
+        const std::optional<std::string>& code_package
     ):
       Executor(ipc_config, user_id, function, function_handler, gpu_memory, device, ld_preload),
       _function_path(function_path),
@@ -199,12 +297,17 @@ namespace mignificient { namespace orchestrator {
       _python_interpreter(config["python"][0].asString()),
       _python_executor(config["python"][1].asString()),
       _python_path(config["pythonpath"].asString()),
-      _gpuless_lib(config["gpuless-lib"].asString())
+      _gpuless_lib(config["gpuless-lib"].asString()),
+      _code_package(code_package)
     {}
 
-    bool start(bool poll_sleep, int cpu_idx = -1);
+    /**
+     * The single launch description of a Python executor, for both launchers.
+     * Interpreter: <code-package>/env/bin/python, or the configured one without a package.
+     */
+    LaunchSpec python_launch(bool poll_sleep, int cpu_idx) const;
 
-  private:
+  protected:
     std::string _function_path;
     std::string _cuda_binary;
     std::string _cubin_analysis;
@@ -212,12 +315,21 @@ namespace mignificient { namespace orchestrator {
     std::string _python_executor;
     std::string _python_path;
     std::string _gpuless_lib;
+    std::optional<std::string> _code_package;
   };
 
-  class SarusContainerExecutorCpp : public Executor {
+  class BareMetalExecutorPython : public ExecutorPython {
   public:
-      using Executor::Executor;
-    SarusContainerExecutorCpp(
+    using ExecutorPython::ExecutorPython;
+
+    bool start(bool poll_sleep, int cpu_idx = -1);
+  };
+
+  class DockerContainerExecutorCpp : public Executor {
+  public:
+    using Executor::Executor;
+
+    DockerContainerExecutorCpp(
         const ipc::IPCConfig& ipc_config,
         const std::string& user_id,
         const std::string& function,
@@ -225,20 +337,68 @@ namespace mignificient { namespace orchestrator {
         const std::string& function_path,
         float gpu_memory, GPUInstance& device,
         const Json::Value& config,
-        const std::optional<std::string>& ld_preload
+        const std::optional<std::string>& ld_preload,
+        const std::optional<std::string>& code_package,
+        ContainerWorker& worker,
+        const std::string& container_runtime = "docker"
     ):
       Executor(ipc_config, user_id, function, function_handler, gpu_memory, device, ld_preload),
       _function_path(function_path),
       _cpp_executor(config["cpp"].asString()),
-      _gpuless_lib(config["gpuless-lib"].asString())
-    {}
+      _gpuless_lib(config["gpuless-lib"].asString()),
+      _image(config["image"].asString()),
+      _code_package(code_package),
+      _container_runtime(container_runtime)
+    {
+      _worker = &worker;
+    }
 
+    // Queues `<runtime> run` on the worker; the container id arrives through drain().
     bool start(bool poll_sleep, int cpu_idx = -1);
 
   private:
     std::string _cpp_executor;
     std::string _function_path;
     std::string _gpuless_lib;
+    std::string _image;
+    std::optional<std::string> _code_package;
+    std::string _container_runtime;
+  };
+
+  class DockerContainerExecutorPython : public ExecutorPython {
+  public:
+
+    DockerContainerExecutorPython(
+        const ipc::IPCConfig& ipc_config,
+        const std::string& user_id,
+        const std::string& function,
+        const std::string& function_handler,
+        const std::string& function_path,
+        const std::string& cuda_binary,
+        const std::string& cubin_analysis,
+        float gpu_memory, GPUInstance& device,
+        const Json::Value& config,
+        const std::optional<std::string>& ld_preload,
+        const std::optional<std::string>& code_package,
+        ContainerWorker& worker,
+        const std::string& container_runtime = "docker"
+    ):
+      ExecutorPython(
+        ipc_config, user_id, function, function_handler, function_path, cuda_binary, cubin_analysis,
+        gpu_memory, device, config, ld_preload, code_package
+      ),
+      _image(config["image"].asString()),
+      _container_runtime(container_runtime)
+    {
+      _worker = &worker;
+    }
+
+    // Queues `<runtime> run` on the worker; the container id arrives through drain().
+    bool start(bool poll_sleep, int cpu_idx = -1);
+
+  private:
+    std::string _image;
+    std::string _container_runtime;
   };
 
 }}

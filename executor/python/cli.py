@@ -1,10 +1,9 @@
 
 import importlib.machinery
 import importlib.util
-import json
-import numpy as np
 import operator
 import os
+import sys
 import traceback
 
 import mignificient
@@ -30,8 +29,20 @@ if __name__ == "__main__":
 
     while True:
 
+        invocation_data = runtime.loop_wait()
+        if invocation_data.size == 0:
+            print("Empty payload, quit")
+            break
+
+        # Load lazily, like the C++ executor: importing the function can
+        # already talk to the gpuless server (e.g. torch registers its fat
+        # binaries), and the server is only known to be ready once the
+        # orchestrator sends the first invocation.
         if func is None:
 
+            # Like Lambda: the function's directory is importable, so a package can split its code
+            # into modules next to the handler.
+            sys.path.insert(0, os.path.dirname(os.path.abspath(function_file)))
             name = os.path.basename(function_file)
             loader = importlib.machinery.SourceFileLoader(name, function_file)
             spec = importlib.util.spec_from_loader(loader.name, loader)
@@ -39,11 +50,6 @@ if __name__ == "__main__":
             mod = importlib.util.module_from_spec(spec)
             loader.exec_module(mod)
             func = getattr(mod, function_name)
-
-        invocation_data = runtime.loop_wait()
-        if invocation_data.size == 0:
-            print("Empty payload, quit")
-            break
 
         try:
             size = func(mignificient.Invocation(runtime, invocation_data, runtime.result()))

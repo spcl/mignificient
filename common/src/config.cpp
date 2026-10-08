@@ -94,6 +94,28 @@ namespace mignificient { namespace ipc {
       }
     }
 
+    if (ipc.isMember("client-root-base")) {
+      ipc_config.client_root_base = ipc["client-root-base"].asString();
+      // ',' would break the container's --mount option.
+      if (ipc_config.client_root_base.empty() || ipc_config.client_root_base[0] != '/' ||
+          ipc_config.client_root_base.find(',') != std::string::npos ||
+          ipc_config.client_root_base.size() > MAX_CLIENT_ROOT_BASE_LEN ||
+          ipc_config.client_root_base == "/" ||
+          ("/" + ipc_config.client_root_base + "/").find("/../") != std::string::npos) {
+        throw std::runtime_error("ipc.client-root-base must be an absolute path other than / without ',' and '..' of at most " +
+                                 std::to_string(MAX_CLIENT_ROOT_BASE_LEN) + " characters");
+      }
+    }
+
+    if (ipc.isMember("iceoryx2-config")) {
+      ipc_config.iox2_config_file = ipc["iceoryx2-config"].asString();
+      // Absolute: it is mounted at the same path in containers; ',' would break --mount.
+      if (!ipc_config.iox2_config_file.empty() &&
+          (ipc_config.iox2_config_file[0] != '/' || ipc_config.iox2_config_file.find(',') != std::string::npos)) {
+        throw std::runtime_error("ipc.iceoryx2-config must be an absolute path without ','");
+      }
+    }
+
     const char* env_gpuless_req = std::getenv("MIGNIFICIENT_GPULESS_REQUEST_SIZE");
     const char* env_gpuless_resp = std::getenv("MIGNIFICIENT_GPULESS_RESPONSE_SIZE");
 

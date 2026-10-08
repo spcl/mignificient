@@ -4,6 +4,8 @@
   "timeout-check-interval-ms": 100,
   "ipc": {
     "backend": "iceoryx2",
+    "client-root-base": "/dev/shm/mignificient",
+    "iceoryx2-config": "${CMAKE_BINARY_DIR}/config/iceoryx2.toml",
     "buffer-config": {
       "orchestrator-executor": {
         "invocation-size": 1048576,
@@ -41,11 +43,26 @@
     "cpu-bind-executor": false,
     "cpu-bind-gpuless": false,
     "cpu-bind-gpuless-separate": false,
+    "container-runtime": "docker",
+    "startup-timeout-ms": 30000,
+    "package-roots": [],
     "bare-metal-executor": {
       "cpp": "${BARE_METAL_EXECUTOR_CPP}",
-      "python": ${BARE_METAL_EXECUTOR_PYTHON},
+      "python": ${BARE_METAL_EXECUTOR_PYTHON
+      },
       "pythonpath": "${BARE_METAL_EXECUTOR_PYTHONPATH}",
       "gpuless-lib": "${CMAKE_BINARY_DIR}/gpuless/libgpuless.so",
+      "gpuless-exec": "${CMAKE_BINARY_DIR}/gpuless/manager_device"
+    },
+    "container-executor": {
+      "image": "spcleth/mignificient:executor",
+      "cpp": "/opt/mignificient/build/executor/bin/executor_cpp",
+      "python": [
+        "/usr/bin/python3",
+        "/opt/mignificient/build/executor/bin/executor_python.py"
+      ],
+      "pythonpath": "/opt/mignificient/build/executor/",
+      "gpuless-lib": "/opt/mignificient/build/gpuless/libgpuless.so",
       "gpuless-exec": "${CMAKE_BINARY_DIR}/gpuless/manager_device"
     }
   }

@@ -16,10 +16,11 @@ namespace mignificient { namespace orchestrator {
   class Users {
   public:
 
-    Users(GPUManager& gpu_manager, const Json::Value& config, const ipc::IPCConfig& ipc_config):
+    Users(GPUManager& gpu_manager, const Json::Value& config, const ipc::IPCConfig& ipc_config, ContainerWorker& container_worker):
       _config(config),
       _gpu_manager(gpu_manager),
-      _ipc_config(ipc_config)
+      _ipc_config(ipc_config),
+      _container_worker(container_worker)
     {
 
     }
@@ -98,6 +99,7 @@ namespace mignificient { namespace orchestrator {
         spdlog::info("Using lukewarm client {} for user {}, triggering swap-in", lukewarm_client->id(), username);
         selected_client = lukewarm_client;
         selected_gpu = lukewarm_client->gpu_instance();
+        log_ignored_executor(*invocation, selected_client);
 
         auto* invoc_ptr = invocation.get();
         // Store the invocation for later
@@ -156,6 +158,10 @@ namespace mignificient { namespace orchestrator {
 
         }
 
+      }
+
+      if(!new_client_created) {
+        log_ignored_executor(*invocation, selected_client);
       }
 
       // Add invocation to the selected client/GPU
@@ -238,6 +244,23 @@ namespace mignificient { namespace orchestrator {
       }
     }
 
+    // Unregistered clients that can't start anymore: on_fail(client, reason), then removed.
+    template<typename F>
+    void check_startup(std::chrono::milliseconds timeout, F on_fail)
+    {
+      for (auto& [username, clients] : _gpu_clients) {
+        for (auto it = clients.begin(); it != clients.end(); ) {
+          std::optional<std::string> reason;
+          if ((reason = (*it)->startup_failure(timeout))) {
+            on_fail(it->get(), *reason);
+            it = clients.erase(it);
+          } else {
+            ++it;
+          }
+        }
+      }
+    }
+
     template<typename F>
     void check_oom(F on_oom)
     {
@@ -255,6 +278,13 @@ namespace mignificient { namespace orchestrator {
 
   private:
 
+    static void log_ignored_executor(const ActiveInvocation& invocation, const Client* client)
+    {
+      if(invocation.executor() && (*invocation.executor() == "container") != client->executor_ptr()->is_container()) {
+        spdlog::info("Warm client {}: ignoring requested executor '{}'", client->id(), *invocation.executor());
+      }
+    }
+
     Client* allocate(const std::string& username, const std::string& fname, ActiveInvocation* invocation, GPUInstance* selected_gpu)
     {
       // Create a new client with configured buffer sizes
@@ -268,7 +298,9 @@ namespace mignificient { namespace orchestrator {
       auto it_gpuless = _ipc_config.buffer_configs.find("orchestrator-gpuless");
       if (it_gpuless != _ipc_config.buffer_configs.end()) gpuless_buf = it_gpuless->second;
 
-      _gpu_clients[username].push_back(std::make_unique<Client>(_ipc_config.backend, client_id, fname, executor_buf, gpuless_buf));
+      _gpu_clients[username].push_back(std::make_unique<Client>(
+        _ipc_config.backend, client_id, fname, executor_buf, gpuless_buf, _ipc_config.client_root(client_id)
+      ));
       auto selected_client = _gpu_clients[username].back().get();
       selected_client->set_function_config(fhandler, invocation->function_path(), invocation->language());
 
@@ -293,8 +325,14 @@ namespace mignificient { namespace orchestrator {
 
       auto spawn_time = std::chrono::high_resolution_clock::now();
 
+      // The request's "executor" picks the executor kind of a new client; config is the default.
+      bool use_container = invocation->executor().value_or(_config["type"].asString()) == "container";
+      spdlog::info("Allocate client {} with {} executor{}", client_id, use_container ? "container" : "bare-metal",
+                   _ipc_config.backend == ipc::IPCBackend::ICEORYX_V2 ? ", iceoryx2 directory " + _ipc_config.client_root(client_id) : "");
+
+      // GPUless server always runs bare-metal on the host
       GPUlessServer gpuless_server;
-      gpuless_server.start(
+      bool started = gpuless_server.start(
         _ipc_config, client_id, *selected_gpu,
         _config["poll-gpuless-sleep"].asBool(),
         _config["use-vmm"].asBool(),
@@ -303,33 +341,66 @@ namespace mignificient { namespace orchestrator {
         gpuless_cpu_idx
       );
 
+      std::string container_runtime = _config.isMember("container-runtime") ? _config["container-runtime"].asString() : "docker";
 
       std::unique_ptr<Executor> executor;
-      if(invocation->language() == Language::CPP) {
+      if(use_container) {
 
-        auto exec = std::make_unique<BareMetalExecutorCpp>(
-          _ipc_config, client_id, fname, fhandler, invocation->function_path(),
-          invocation->gpu_memory(), *selected_gpu, _config["bare-metal-executor"],
-          invocation->ld_preload()
-        );
-        exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
+        if(invocation->language() == Language::CPP) {
 
-        executor = std::move(exec);
+          auto exec = std::make_unique<DockerContainerExecutorCpp>(
+            _ipc_config, client_id, fname, fhandler, invocation->function_path(),
+            invocation->gpu_memory(), *selected_gpu, _config["container-executor"],
+            invocation->ld_preload(), invocation->code_package(), _container_worker, container_runtime
+          );
+          started = exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx) && started;
+
+          executor = std::move(exec);
+        } else {
+
+          auto exec = std::make_unique<DockerContainerExecutorPython>(
+            _ipc_config, client_id, fname, fhandler, invocation->function_path(),
+            invocation->cuda_binary(), invocation->cubin_analysis(),
+            invocation->gpu_memory(), *selected_gpu, _config["container-executor"],
+            invocation->ld_preload(), invocation->code_package(), _container_worker, container_runtime
+          );
+          started = exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx) && started;
+
+          executor = std::move(exec);
+        }
+
       } else {
 
-        auto exec = std::make_unique<BareMetalExecutorPython>(
-          _ipc_config, client_id, fname, fhandler, invocation->function_path(),
-          invocation->cuda_binary(), invocation->cubin_analysis(),
-          invocation->gpu_memory(), *selected_gpu,
-          _config["bare-metal-executor"],
-          invocation->ld_preload()
-        );
-        exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx);
+        if(invocation->language() == Language::CPP) {
 
-        executor = std::move(exec);
+          auto exec = std::make_unique<BareMetalExecutorCpp>(
+            _ipc_config, client_id, fname, fhandler, invocation->function_path(),
+            invocation->gpu_memory(), *selected_gpu, _config["bare-metal-executor"],
+            invocation->ld_preload()
+          );
+          started = exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx) && started;
+
+          executor = std::move(exec);
+        } else {
+
+          auto exec = std::make_unique<BareMetalExecutorPython>(
+            _ipc_config, client_id, fname, fhandler, invocation->function_path(),
+            invocation->cuda_binary(), invocation->cubin_analysis(),
+            invocation->gpu_memory(), *selected_gpu,
+            _config["bare-metal-executor"],
+            invocation->ld_preload(), invocation->code_package()
+          );
+          started = exec->start(_config["poll-sleep"].asBool(), executor_cpu_idx) && started;
+
+          executor = std::move(exec);
+        }
 
       }
 
+      if(!started) {
+        // Torn down by check_startup on the next tick.
+        selected_client->set_startup_error("executor failed to start: spawn failed");
+      }
       selected_client->set_spawn_time(spawn_time);
       selected_client->set_gpuless_server(std::move(gpuless_server), selected_gpu);
       selected_gpu->add_executor(executor.get());
@@ -341,6 +412,7 @@ namespace mignificient { namespace orchestrator {
     const Json::Value& _config;
     GPUManager& _gpu_manager;
     const ipc::IPCConfig& _ipc_config;
+    ContainerWorker& _container_worker;
 
     int _index = 0;
     // TODO: this might require extension to support platforms where hyperthreads have consecutive IDs

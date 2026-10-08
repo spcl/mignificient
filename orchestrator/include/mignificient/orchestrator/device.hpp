@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <queue>
+#include <unordered_set>
 #include <vector>
 #include <memory>
 
@@ -195,15 +196,31 @@ namespace mignificient { namespace orchestrator {
     void add_executor(Executor* executor)
     {
       _used_memory += executor->gpu_memory();
-      _executors[executor->pid()] = executor;
+      _executors.insert(executor);
     }
 
-    void close_executor(pid_t pid)
+    // Keyed by pointer: container executors have no host pid.
+    void close_executor(Executor* executor)
     {
-      auto memory = _executors[pid]->gpu_memory();
-      SPDLOG_DEBUG("Closing down executor PID {}, freeing up {} MB", pid, memory);
-      _executors.erase(pid);
+      if(!_executors.erase(executor)) {
+        return;
+      }
+      auto memory = executor->gpu_memory();
+      SPDLOG_DEBUG("Closing down executor of {}, freeing up {} MB", executor->user(), memory);
       _used_memory -= memory;
+    }
+
+    // Drop queued invocations of a killed client; they are answered by the client itself.
+    void remove_pending_invocations(Client* client)
+    {
+      std::queue<invoc_t> kept;
+      while(!_pending_invocations.empty()) {
+        if(std::get<1>(_pending_invocations.front()) != client) {
+          kept.push(_pending_invocations.front());
+        }
+        _pending_invocations.pop();
+      }
+      _pending_invocations = std::move(kept);
     }
 
     void release_memory(float amount)
@@ -248,7 +265,7 @@ namespace mignificient { namespace orchestrator {
 
     invoc_t _current_invocation;
 
-    std::unordered_map<pid_t, Executor*> _executors;
+    std::unordered_set<Executor*> _executors;
   };
 
   class GPUDevice {

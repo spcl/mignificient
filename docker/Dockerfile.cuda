@@ -1,0 +1,16 @@
+FROM spcleth/mignificient:base AS cuda-builder
+
+RUN wget -q https://developer.download.nvidia.com/compute/cuda/11.6.2/local_installers/cuda_11.6.2_510.47.03_linux.run \
+    && chmod +x cuda_11.6.2_510.47.03_linux.run \
+    && ./cuda_11.6.2_510.47.03_linux.run --toolkit --silent --toolkitpath=/opt/cuda-11.6 --no-opengl-libs --no-man-page --no-drm \
+    && rm cuda_11.6.2_510.47.03_linux.run
+
+# Install cuDNN 8.9.7 for CUDA 11
+# Note: cuDNN requires manual download from NVIDIA. Unfortunately, the links are not openly provided.
+# Place the tarball in the docker/ directory.
+# Download from: https://developer.nvidia.com/rdp/cudnn-archive
+# Expected file: cudnn-linux-x86_64-8.9.7.29_cuda11-archive.tar.xz
+COPY cudnn-linux-x86_64-8.9.7.29_cuda11-archive.tar.xz /tmp/cudnn.tar.xz
+RUN mkdir -p /opt/cudnn-8.9.7 \
+    && tar -xf /tmp/cudnn.tar.xz -C /opt/cudnn-8.9.7 --strip-components=1 \
+    && rm /tmp/cudnn.tar.xz

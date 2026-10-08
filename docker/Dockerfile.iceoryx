@@ -1,0 +1,32 @@
+ARG BASE_IMAGE=spcleth/mignificient:base
+FROM ${BASE_IMAGE} AS iceoryx-builder
+
+RUN apt-get update && apt-get install -y \
+    libacl1-dev \
+    && rm -rf /var/lib/apt/lists/*\
+    && curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain 1.88 -y
+
+
+# Build iceoryx v1 from local source (with patches applied)
+COPY external/iceoryx.patch /src/iceoryx.patch
+RUN git clone https://github.com/eclipse-iceoryx/iceoryx.git /src/iceoryx \
+    && cd /src/iceoryx && git checkout 83798774098a6ca2931be0452a1840aefb65f3c6 \
+    && git apply /src/iceoryx.patch || true \
+    && cmake -B build -S iceoryx_meta \
+      -DCMAKE_INSTALL_PREFIX=/opt/iceoryx \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_SHARED_LIBS=ON \
+    && cmake --build build -j$(nproc) \
+    && cmake --install build
+
+# Build iceoryx2 from source: pinned version plus the file-backend patch, both in
+# external/iceoryx2-build.sh (the same script builds the host install, see README).
+# Host and container must use the same build: they share the per-client iceoryx2 directory.
+RUN apt-get update && apt-get install -y clang libclang-dev && rm -rf /var/lib/apt/lists/*
+COPY external/iceoryx2-build.sh external/iceoryx2-file-backend.patch external/iceoryx2-version /src/
+RUN . $HOME/.bashrc && /src/iceoryx2-build.sh /src/iceoryx2 /src/iceoryx2/build /opt/iceoryx2
+
+FROM ${BASE_IMAGE}
+
+COPY --from=iceoryx-builder /opt/iceoryx /opt/iceoryx
+COPY --from=iceoryx-builder /opt/iceoryx2 /opt/iceoryx2

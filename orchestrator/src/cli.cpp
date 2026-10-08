@@ -1,5 +1,6 @@
 
 #include <fstream>
+#include <optional>
 
 #include <iceoryx_hoofs/posix_wrapper/signal_handler.hpp>
 #include <json/json.h>
@@ -34,10 +35,16 @@ int main(int argc, char ** argv)
     }
   }
 
-  mignificient::orchestrator::Orchestrator::init(config);
-  mignificient::orchestrator::Orchestrator orchestrator{config, argv[2]};
+  std::optional<mignificient::orchestrator::Orchestrator> orchestrator;
+  try {
+    mignificient::orchestrator::Orchestrator::init(config);
+    orchestrator.emplace(config, argv[2]);
+  } catch (const std::exception& e) {
+    spdlog::error("Failed to start the orchestrator: {}", e.what());
+    return 1;
+  }
 
-  orchestrator.run();
+  orchestrator->run();
 
   return 0;
 }

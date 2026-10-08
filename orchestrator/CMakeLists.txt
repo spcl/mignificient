@@ -4,6 +4,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 add_executable(orchestrator
   src/client.cpp
+  src/container_worker.cpp
   src/orchestrator.cpp
   src/cli.cpp
   src/device.cpp
@@ -27,3 +28,6 @@ target_link_libraries(orchestrator
 if(BUILD_ICEORYX2)
   target_link_libraries(orchestrator iceoryx2-cxx::static-lib-cxx)
 endif()
+
+add_executable(test_package_path test/test_package_path.cpp)
+target_include_directories(test_package_path PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)

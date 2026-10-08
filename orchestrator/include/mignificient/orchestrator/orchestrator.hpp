@@ -14,6 +14,7 @@
 #include <json/value.h>
 
 #include <mignificient/orchestrator/client.hpp>
+#include <mignificient/orchestrator/container_worker.hpp>
 #include <mignificient/orchestrator/device.hpp>
 #include <mignificient/orchestrator/invocation.hpp>
 #include <mignificient/orchestrator/http.hpp>
@@ -40,13 +41,6 @@ namespace mignificient { namespace orchestrator {
     static const ipc::IPCConfig& ipc_config() { return _ipc_config; }
     static ipc::IPCBackend ipc_backend() { return _ipc_config.backend; }
 
-#ifdef MIGNIFICIENT_WITH_ICEORYX2
-    static iox2::Node<iox2::ServiceType::Ipc>& iceoryx_node_v2()
-    {
-      return _iox2_node.value();
-    }
-#endif
-
   private:
 
     int _client_id = 0;
@@ -55,6 +49,10 @@ namespace mignificient { namespace orchestrator {
 
     void _check_timeouts();
     void _check_oom();
+    // Drains container starts and tears down clients that failed to start.
+    void _check_startup();
+    // Drops the client's IPC event attachments before it is killed.
+    void _detach_client(Client* client);
     void _handle_admin_request(AdminRequest&& req);
 
     std::unordered_map<int, Client> clients;
@@ -74,9 +72,11 @@ namespace mignificient { namespace orchestrator {
     std::unordered_map<int, Context> _server_contexts;
     Context _http_context;
 
-    GPUManager _gpu_manager;
+    // executor.startup-timeout-ms: executor and gpuless server must register within it.
+    std::chrono::milliseconds _startup_timeout;
+    ContainerWorker _container_worker;
 
-    Users _users;
+    GPUManager _gpu_manager;
 
     // iceoryx1: V1 HTTP handler (used as WaitSet callback)
     std::optional<iox::popo::WaitSet<>> _waitset;
@@ -87,7 +87,6 @@ namespace mignificient { namespace orchestrator {
     void _event_loop_v1();
 
 #ifdef MIGNIFICIENT_WITH_ICEORYX2
-    static std::optional<iox2::Node<iox2::ServiceType::Ipc>> _iox2_node;
 
     std::optional<iox2::WaitSet<iox2::ServiceType::Ipc>> _waitset_v2;
 
@@ -103,6 +102,9 @@ namespace mignificient { namespace orchestrator {
     void _event_loop_v2();
     void _handle_http_v2();
 #endif
+
+    // Last member, destroyed first: clients hold guards attached to the waitsets above.
+    Users _users;
   };
 
 }}

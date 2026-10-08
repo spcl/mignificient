@@ -1,0 +1,39 @@
+diff --git a/iceoryx2-cal/src/dynamic_storage/recommended.rs b/iceoryx2-cal/src/dynamic_storage/recommended.rs
+index 6009038..95c6e26 100644
+--- a/iceoryx2-cal/src/dynamic_storage/recommended.rs
++++ b/iceoryx2-cal/src/dynamic_storage/recommended.rs
+@@ -13,7 +13,7 @@
+ /// Provides the recommended inter-process
+ /// [`DynamicStorage`](crate::dynamic_storage::DynamicStorage) concept
+ /// implementation for the target.
+-pub type Ipc<T> = crate::dynamic_storage::posix_shared_memory::Storage<T>;
++pub type Ipc<T> = crate::dynamic_storage::file::Storage<T>;
+ 
+ /// Provides the recommended process-local
+ /// [`DynamicStorage`](crate::dynamic_storage::DynamicStorage) concept
+diff --git a/iceoryx2-cal/src/shared_memory/recommended.rs b/iceoryx2-cal/src/shared_memory/recommended.rs
+index e8c664b..1fd9682 100644
+--- a/iceoryx2-cal/src/shared_memory/recommended.rs
++++ b/iceoryx2-cal/src/shared_memory/recommended.rs
+@@ -13,7 +13,7 @@
+ /// Provides the recommended inter-process
+ /// [`SharedMemory`](crate::shared_memory::SharedMemory) concept
+ /// implementation for the target.
+-pub type Ipc<Allocator> = crate::shared_memory::posix::Memory<Allocator>;
++pub type Ipc<Allocator> = crate::shared_memory::file::Memory<Allocator>;
+ 
+ /// Provides the recommended process-local
+ /// [`SharedMemory`](crate::shared_memory::SharedMemory) concept
+diff --git a/iceoryx2-cal/src/zero_copy_connection/recommended.rs b/iceoryx2-cal/src/zero_copy_connection/recommended.rs
+index 93bdc29..46fb164 100644
+--- a/iceoryx2-cal/src/zero_copy_connection/recommended.rs
++++ b/iceoryx2-cal/src/zero_copy_connection/recommended.rs
+@@ -13,7 +13,7 @@
+ /// Provides the recommended inter-process
+ /// [`ZeroCopyConnection`](crate::zero_copy_connection::ZeroCopyConnection)
+ /// concept implementation for the target.
+-pub type Ipc = crate::zero_copy_connection::posix_shared_memory::Connection;
++pub type Ipc = crate::zero_copy_connection::file::Connection;
+ 
+ /// Provides the recommended process-local
+ /// [`ZeroCopyConnection`](crate::zero_copy_connection::ZeroCopyConnection)
