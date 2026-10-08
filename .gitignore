@@ -38,3 +38,5 @@ logs
 
 # cuDNN archive required by docker/Dockerfile.cuda (not redistributable)
 docker/*.tar.xz
+__pycache__/
+*.pyc
