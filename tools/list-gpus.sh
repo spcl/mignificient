@@ -50,26 +50,19 @@ while IFS= read -r line; do
             # Process MIG instances
             while IFS= read -r mig_line; do
 
-              if [[ $mig_line =~ MIG[[:space:]]([0-9]+g\.[0-9]+gb).*UUID:[[:space:]]([A-Za-z0-9-]+) ]]; then
-                  mig_size="${BASH_REMATCH[1]}"
-                  mig_uuid="MIG-${BASH_REMATCH[2]}"
-                  
-                  # Calculate approximate compute units and memory
-                  case $mig_size in
-                      "1g.5gb") compute_units=14; memory=5 ;;
-                      "2g.10gb") compute_units=28; memory=10 ;;
-                      "3g.20gb") compute_units=42; memory=20 ;;
-                      "4g.20gb") compute_units=56; memory=20 ;;
-                      "7g.40gb") compute_units=98; memory=40 ;;
-                      *) compute_units=0; memory=0 ;;
-                  esac
+              # Current drivers print "UUID: MIG-<uuid>", old ones "UUID: MIG-GPU-<uuid>/<gi>/<ci>": keep it as printed.
+              if [[ $mig_line =~ MIG[[:space:]]([0-9]+)g\.([0-9]+)gb.*UUID:[[:space:]]*([^\)]+) ]]; then
+                  mig_size="${BASH_REMATCH[1]}g.${BASH_REMATCH[2]}gb"
+                  mig_uuid="${BASH_REMATCH[3]}"
 
-                  memory=$((memory * 1024))
-                  
+                  # From the profile name (A100 40/80 GB, H100): <slices>g.<memory>gb, 14 SMs per slice on A100.
+                  compute_units=$((BASH_REMATCH[1] * 14))
+                  memory=$((BASH_REMATCH[2] * 1024))
+
                   # Add MIG instance to instances array
                   instances_json=$(echo $instances_json | jq --arg uuid "$mig_uuid" \
                       --arg memory "$memory" --arg compute_units "$compute_units" --arg mig_size "${mig_size}" \
-                      '. += [{uuid: $uuid, mig_size: $mig_size, memory: ($memory|tonumber), compute_units: ($compute_units|tonumber)}]')
+                      '. += [{uuid: $uuid, mig_size: $mig_size, instance_size: $mig_size, memory: ($memory|tonumber), compute_units: ($compute_units|tonumber)}]')
               fi
             done <<< "$mig_instances"
         fi
