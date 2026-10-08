@@ -4,6 +4,8 @@
 #include <list>
 #include <stdexcept>
 #include <string>
+#include <algorithm>
+#include <deque>
 #include <queue>
 #include <unordered_set>
 #include <vector>
@@ -60,7 +62,7 @@ namespace mignificient { namespace orchestrator {
 
     void add_pending_invocation(Client* client, ActiveInvocation* invocation)
     {
-      _pending_invocations.emplace(invocation, client);
+      _pending_invocations.emplace_back(invocation, client);
     }
 
     void add_invocation(Client* client, ActiveInvocation* invocation)
@@ -68,7 +70,7 @@ namespace mignificient { namespace orchestrator {
       if(is_busy() || !client->is_active()) {
 
         SPDLOG_DEBUG("[GPUInstance {}] Add invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
-        _pending_invocations.emplace(invocation, client);
+        _pending_invocations.emplace_back(invocation, client);
 
         schedule_next();
 
@@ -90,46 +92,62 @@ namespace mignificient { namespace orchestrator {
     {
       /***
        * (1) Case 1: no active invocation, put the next one. When? Just registered or finished.
-       * (2) There is an active invocation, we try to move forward the next pending one.
+       * (2) There is an active invocation, we try to move forward the pending ones.
        */
 
-      // FIXME: Not tested with scheduling more than 2 invocations
-      auto [invocation, client] = _pending_invocations.front();
-      SPDLOG_DEBUG("Attempting to schedule {}, client is active? {}", invocation->uuid(), client->is_active());
-      if(!client->is_active()) {
+      if(_pending_invocations.empty()) {
         return;
       }
 
       if(is_busy()) {
-
-        auto current_client = std::get<1>(_current_invocation);
-        if(client == current_client) {
-          SPDLOG_DEBUG("Cannot schedule early on the same container; waiting.");
-          return;
-        }
-
-        auto status = client->status();
 
         /**
          * SEQUENTIAL: do nothing, wait for current to finish
          * OVERLAP_CPU: start function, block device
          * OVERLAP_CPU_MEMORY: start function, block device
          * FULL_OVERLAP: start function, block device
+         *
+         * Every waiting invocation starts, not only the next one: with 3+ clients, the third would otherwise
+         * start its CPU part only when the first finishes. The device is still handed over in FIFO order.
          */
-        if(status == ClientStatus::NOT_ACTIVE && _sharing_model != SharingModel::SEQUENTIAL) {
-          SPDLOG_DEBUG("[GPUInstance {}] Start CPU invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
-          client->send_request();
+        if(_sharing_model == SharingModel::SEQUENTIAL) {
+          return;
         }
 
-        if(_sharing_model == SharingModel::OVERLAP_CPU_MEMCPY) {
-          SPDLOG_DEBUG("[GPUInstance {}] Active memcpy for invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
-          client->activate_memcpy();
-        } else if(_sharing_model == SharingModel::FULL_OVERLAP) {
-          SPDLOG_DEBUG("[GPUInstance {}] Active full execution for invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
-          client->activate_kernels();
+        auto current_client = std::get<1>(_current_invocation);
+        for(auto& [invocation, client] : _pending_invocations) {
+
+          SPDLOG_DEBUG("Attempting to schedule {}, client is active? {}", invocation->uuid(), client->is_active());
+          if(!client->is_active()) {
+            continue;
+          }
+          if(client == current_client) {
+            SPDLOG_DEBUG("Cannot schedule early on the same container; waiting.");
+            continue;
+          }
+
+          // A client queued twice is started once; its second invocation waits for the first.
+          if(client->status() == ClientStatus::NOT_ACTIVE) {
+            SPDLOG_DEBUG("[GPUInstance {}] Start CPU invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
+            client->send_request();
+          }
+
+          if(_sharing_model == SharingModel::OVERLAP_CPU_MEMCPY) {
+            SPDLOG_DEBUG("[GPUInstance {}] Active memcpy for invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
+            client->activate_memcpy();
+          } else if(_sharing_model == SharingModel::FULL_OVERLAP) {
+            SPDLOG_DEBUG("[GPUInstance {}] Active full execution for invocation with id {} for client {}", _uuid, invocation->uuid(), client->id());
+            client->activate_kernels();
+          }
         }
 
       } else {
+
+        auto [invocation, client] = _pending_invocations.front();
+        SPDLOG_DEBUG("Attempting to schedule {}, client is active? {}", invocation->uuid(), client->is_active());
+        if(!client->is_active()) {
+          return;
+        }
 
         auto status = client->status();
         // Not scheduled yet, do the basic work
@@ -146,7 +164,7 @@ namespace mignificient { namespace orchestrator {
           client->activate_kernels();
         }
 
-        _pending_invocations.pop();
+        _pending_invocations.pop_front();
         _current_invocation = std::make_tuple(invocation, client);
 
         // Check if the next one can be scheduled
@@ -219,14 +237,11 @@ namespace mignificient { namespace orchestrator {
     // Drop queued invocations of a killed client; they are answered by the client itself.
     void remove_pending_invocations(Client* client)
     {
-      std::queue<invoc_t> kept;
-      while(!_pending_invocations.empty()) {
-        if(std::get<1>(_pending_invocations.front()) != client) {
-          kept.push(_pending_invocations.front());
-        }
-        _pending_invocations.pop();
-      }
-      _pending_invocations = std::move(kept);
+      _pending_invocations.erase(
+        std::remove_if(_pending_invocations.begin(), _pending_invocations.end(),
+                       [client](const invoc_t& inv) { return std::get<1>(inv) == client; }),
+        _pending_invocations.end()
+      );
     }
 
     void release_memory(float amount)
@@ -267,7 +282,7 @@ namespace mignificient { namespace orchestrator {
 
     typedef std::tuple<ActiveInvocation*, Client*> invoc_t;
 
-    std::queue<invoc_t> _pending_invocations;
+    std::deque<invoc_t> _pending_invocations;
 
     invoc_t _current_invocation;
 
