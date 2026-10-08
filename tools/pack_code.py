@@ -11,12 +11,22 @@ orchestrator sets TORCH_HOME=<pkg>/<package.json "torch-home">. prepare.py itsel
 Python packages carry a full conda env with *dynamically linked* conda PyTorch;
 pip torch wheels statically link cudart and break gpuless LD_PRELOAD interception.
 
+Python packages also get cubin-analysis.txt: gpuless's kernel parameter table for the env's CUDA libraries
+(kernel names embed a per-build hash, so it must match the env). It comes from gpuless's cubin_analyzer
+(--cubin-analyzer, from the MIGnificient build; cuobjdump from --cuda-home), is cached by the libraries' hash
+under ~/.cache/mignificient/cubin/, and package.json "cubin-analysis" names it; the orchestrator uses it when a
+request has no cubin-analysis. --no-cubin skips it.
+
+Pillow: conda's Pillow links libjpeg 9 (JPEG decode ~2x slower than libjpeg-turbo); the same version's pip
+wheel bundles libjpeg-turbo, so packing replaces it and checks the result.
+
 The env is copied from conda's package cache unless the cache is on the same filesystem
 as --dest; set CONDA_PKGS_DIRS=<dir on dest filesystem> to get hard links.
 Speeds up the build and saves space for bare-metal packages.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -38,6 +48,19 @@ RUNTIMES = {
 }  # torch 1.12 breaks with numpy 2
 CHANNELS = ["pytorch", "conda-forge"]  # cudatoolkit 11.6 lives on conda-forge
 TORCH_LIB = "lib/python3.9/site-packages/torch/lib/libc10_cuda.so"
+# Libraries with the kernels gpuless needs parameter data for (inference: no cuDNN *_train).
+CUBIN_LIBS = [
+    f"lib/python3.9/site-packages/torch/lib/{n}"
+    for n in (
+        "libtorch_cuda_cu.so",
+        "libtorch_cuda_cpp.so",
+        "libtorch_cuda_linalg.so",
+        "libcudnn_cnn_infer.so.8",
+        "libcudnn_ops_infer.so.8",
+        "libcudnn_adv_infer.so.8",
+    )
+] + ["lib/libcublas.so.11", "lib/libcublasLt.so.11"]
+CUBIN_CACHE = Path.home() / ".cache" / "mignificient" / "cubin"
 
 
 def find_conda(explicit=None):
@@ -61,6 +84,81 @@ def has_dynamic_cudart(lib: Path) -> bool:
     if r.returncode != 0:
         raise SystemExit(f"Error: readelf -d {lib} failed: {r.stderr.strip()}")
     return re.search(r"\(NEEDED\).*\[libcudart\.so", r.stdout) is not None
+
+
+def cubin_analysis(env: Path, out: Path, analyzer: Path, arch: str, cuda_home: Path):
+    """Write the cubin analysis of env's CUDA libraries to out (from the cache if the libraries are unchanged)."""
+    libs = [env / l for l in CUBIN_LIBS if (env / l).is_file()]
+    if not libs:
+        raise SystemExit(
+            f"Error: none of the CUDA libraries for the cubin analysis found in {env}"
+        )
+    h = hashlib.sha256(arch.encode())
+    for lib in libs:
+        with open(lib, "rb") as f:
+            for block in iter(lambda: f.read(1 << 24), b""):
+                h.update(block)
+    cached = CUBIN_CACHE / f"{h.hexdigest()[:32]}-sm{arch}.txt"
+    if not cached.is_file():
+        if not os.access(analyzer, os.X_OK):
+            raise SystemExit(
+                f"Error: cubin analyzer '{analyzer}' not found (--cubin-analyzer, or --no-cubin)"
+            )
+        CUBIN_CACHE.mkdir(parents=True, exist_ok=True)
+        tmp = cached.with_suffix(f".tmp{os.getpid()}")
+        print(f"cubin analysis of {len(libs)} libraries (takes ~1.5 min)")
+        env_vars = clean_env(PATH=f"{cuda_home}/bin:" + os.environ["PATH"])
+        r = subprocess.run(
+            [str(analyzer), str(tmp), arch, ",".join(map(str, libs))],
+            env=env_vars,
+            capture_output=True,
+            text=True,
+        )
+        if r.returncode != 0 or not tmp.is_file() or tmp.stat().st_size == 0:
+            tmp.unlink(missing_ok=True)
+            raise SystemExit(
+                f"Error: cubin_analyzer failed ({r.returncode}): {r.stderr[-500:]}"
+            )
+        tmp.rename(cached)
+    else:
+        print(f"cubin analysis from the cache: {cached}")
+    shutil.copyfile(cached, out)
+
+
+PILLOW_TURBO = "from PIL import features; import sys; sys.exit(0 if features.check_feature('libjpeg_turbo') else 1)"
+
+
+def pillow_turbo(python: str, pip: str):
+    """Replace a Pillow without libjpeg-turbo (conda's) with the same version's pip wheel, then check it."""
+    r = subprocess.run(
+        [python, "-c", "import PIL; print(PIL.__version__)"],
+        capture_output=True,
+        text=True,
+        env=clean_env(),
+    )
+    if r.returncode != 0:
+        return  # no Pillow in the env
+    if subprocess.run([python, "-c", PILLOW_TURBO], env=clean_env()).returncode == 0:
+        return
+    version = r.stdout.strip()
+    print(f"replacing Pillow {version} (no libjpeg-turbo) with its pip wheel")
+    subprocess.run(
+        [
+            pip,
+            "install",
+            "--no-deps",
+            "--force-reinstall",
+            "--only-binary",
+            ":all:",
+            f"pillow=={version}",
+        ],
+        check=True,
+        env=clean_env(),
+    )
+    if subprocess.run([python, "-c", PILLOW_TURBO], env=clean_env()).returncode != 0:
+        raise SystemExit(
+            f"Error: Pillow {version} in the env still decodes JPEG without libjpeg-turbo"
+        )
 
 
 def numpy_ok(python: str) -> bool:
@@ -87,7 +185,7 @@ def clean_env(**extra):
 
 
 def check_reserved(src: Path):
-    for reserved in ("env", "package.json"):
+    for reserved in ("env", "package.json", "cubin-analysis.txt"):
         if (src / reserved).exists():
             raise SystemExit(
                 f"Error: '{reserved}' is reserved in the package; remove it from '{src}'"
@@ -179,7 +277,7 @@ def prepare_and_verify(pkg: Path, python: str, timeout=1800):
         print(f"verified: {len(loadable)} .pt/.pth files load with torch.load")
 
 
-def build(src, lang, pkg, runtime, so, conda_exe, prepare_timeout=1800):
+def build(src, lang, pkg, runtime, so, conda_exe, prepare_timeout=1800, cubin=None):
     if lang == "python":
         # conda wants to create the prefix itself, so env goes first, code copied over after
         subprocess.run(
@@ -221,6 +319,9 @@ def build(src, lang, pkg, runtime, so, conda_exe, prepare_timeout=1800):
                 "Error: the env has numpy >= 2, which breaks torch 1.12 ('Numpy is not available'); "
                 "pin 'numpy<2' in requirements.txt"
             )
+        pillow_turbo(str(pkg / "env/bin/python"), str(pkg / "env/bin/pip"))
+        if cubin:
+            cubin_analysis(pkg / "env", pkg / "cubin-analysis.txt", *cubin)
     copy_code(src, pkg)
     meta = {
         "language": lang,
@@ -231,6 +332,8 @@ def build(src, lang, pkg, runtime, so, conda_exe, prepare_timeout=1800):
         meta["function-file"] = so
     if lang == "python":
         meta["torch-home"] = "torch-cache"
+        if cubin:
+            meta["cubin-analysis"] = "cubin-analysis.txt"
     (pkg / "package.json").write_text(json.dumps(meta, indent=2) + "\n")
     if lang == "python":
         prepare_and_verify(pkg, str(pkg / "env/bin/python"), prepare_timeout)
@@ -246,7 +349,9 @@ def pack(
     conda_exe=None,
     force=False,
     prepare_timeout=1800,
+    cubin=None,
 ) -> Path:
+    """cubin: (analyzer, arch, cuda_home) for python packages, None to skip the cubin analysis."""
     if not src.is_dir():
         raise SystemExit(f"Error: source directory '{src}' does not exist")
     name = src.resolve().name if name is None else name
@@ -270,7 +375,7 @@ def pack(
         shutil.rmtree(pkg)
     pkg.parent.mkdir(parents=True, exist_ok=True)
     try:
-        build(src, lang, pkg, runtime, so, conda_exe, prepare_timeout)
+        build(src, lang, pkg, runtime, so, conda_exe, prepare_timeout, cubin)
     except BaseException:
         shutil.rmtree(pkg, ignore_errors=True)  # no partial packages
         raise
@@ -298,7 +403,30 @@ def main():
         metavar="SECONDS",
         help="kill prepare.py after this long",
     )
+    p.add_argument(
+        "--cubin-analyzer",
+        type=Path,
+        help="gpuless cubin_analyzer of the MIGnificient build "
+        "(<build>/gpuless/cubin_analyzer); required for python packages unless --no-cubin",
+    )
+    p.add_argument(
+        "--cubin-arch",
+        default="86",
+        help="sm version of the cubins to analyze (default 86)",
+    )
+    p.add_argument(
+        "--cuda-home",
+        type=Path,
+        default=Path(os.environ.get("CUDA_HOME", "/opt/cuda/cuda-11.6")),
+        help="CUDA toolkit with cuobjdump (default $CUDA_HOME or /opt/cuda/cuda-11.6)",
+    )
+    p.add_argument("--no-cubin", action="store_true", help="skip the cubin analysis")
     a = p.parse_args()
+    cubin = None
+    if a.type == "python" and not a.no_cubin:
+        if not a.cubin_analyzer:
+            p.error("--cubin-analyzer is required for python packages (or --no-cubin)")
+        cubin = (a.cubin_analyzer.resolve(), a.cubin_arch, a.cuda_home)
     try:
         print(
             pack(
@@ -311,6 +439,7 @@ def main():
                 a.conda_exe,
                 a.force,
                 a.prepare_timeout,
+                cubin,
             )
         )
     except subprocess.CalledProcessError as e:
