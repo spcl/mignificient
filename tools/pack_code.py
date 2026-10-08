@@ -21,11 +21,21 @@ import json
 import os
 import re
 import shutil
+import signal
+import tempfile
 import subprocess
 import sys
 from pathlib import Path
 
-RUNTIMES = {"torch-1.12.1-cu116": ["python=3.9", "pytorch=1.12.1", "torchvision", "cudatoolkit=11.6", "numpy<2"]}  # torch 1.12 breaks with numpy 2
+RUNTIMES = {
+    "torch-1.12.1-cu116": [
+        "python=3.9",
+        "pytorch=1.12.1",
+        "torchvision",
+        "cudatoolkit=11.6",
+        "numpy<2",
+    ]
+}  # torch 1.12 breaks with numpy 2
 CHANNELS = ["pytorch", "conda-forge"]  # cudatoolkit 11.6 lives on conda-forge
 TORCH_LIB = "lib/python3.9/site-packages/torch/lib/libc10_cuda.so"
 
@@ -53,10 +63,35 @@ def has_dynamic_cudart(lib: Path) -> bool:
     return re.search(r"\(NEEDED\).*\[libcudart\.so", r.stdout) is not None
 
 
+def numpy_ok(python: str) -> bool:
+    """True if the env's numpy is < 2 (torch 1.12 breaks with numpy 2)."""
+    r = subprocess.run(
+        [python, "-c", "import numpy; print(numpy.__version__)"],
+        capture_output=True,
+        text=True,
+    )
+    return (
+        r.returncode != 0 or int(r.stdout.split(".")[0]) < 2
+    )  # no numpy at all is fine
+
+
+def clean_env(**extra):
+    """Caller env without preload/library/python-path and gpuless variables."""
+    drop = ("LD_PRELOAD", "LD_LIBRARY_PATH", "PYTHONPATH", "PYTHONHOME")
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in drop and not k.startswith(("GPULESS_", "MIGNIFICIENT_"))
+    }
+    return {**env, **extra}
+
+
 def check_reserved(src: Path):
     for reserved in ("env", "package.json"):
         if (src / reserved).exists():
-            raise SystemExit(f"Error: '{reserved}' is reserved in the package; remove it from '{src}'")
+            raise SystemExit(
+                f"Error: '{reserved}' is reserved in the package; remove it from '{src}'"
+            )
 
 
 def copy_code(src: Path, pkg: Path):
@@ -85,21 +120,41 @@ sys.exit(1 if bad else 0)
 """
 
 
-def prepare_and_verify(pkg: Path, python: str):
+def prepare_and_verify(pkg: Path, python: str, timeout=1800):
     """Run <pkg>/prepare.py (if any), then list and verify the package's models."""
     cache = pkg / "torch-cache"
     cache.mkdir(exist_ok=True)
     prep = pkg / "prepare.py"
     if prep.is_file():
-        r = subprocess.run([python, "prepare.py"], cwd=pkg, env={**os.environ, "TORCH_HOME": str(cache)})
-        if r.returncode != 0:
-            raise SystemExit(f"Error: prepare.py failed (exit {r.returncode})")
+        proc = subprocess.Popen(
+            [python, "prepare.py"],
+            cwd=pkg,
+            env=clean_env(TORCH_HOME=str(cache)),
+            start_new_session=True,
+        )
+        try:
+            rc = proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait()
+            raise SystemExit(
+                f"Error: prepare.py timed out after {timeout} s (--prepare-timeout)"
+            )
+        if rc != 0:
+            raise SystemExit(f"Error: prepare.py failed (exit {rc})")
     files = {f for f in cache.rglob("*") if f.is_file()}
-    files |= {f for ext in ("*.pt", "*.pth") for f in pkg.rglob(ext)
-              if f.is_file() and not f.is_relative_to(pkg / "env")}
+    for d, dirs, names in os.walk(pkg):
+        dirs[:] = [x for x in dirs if Path(d, x) != pkg / "env"]  # prune env/
+        files |= {
+            Path(d, n)
+            for n in names
+            if n.endswith((".pt", ".pth")) and Path(d, n).is_file()
+        }
     if not files:
         if prep.is_file():
-            raise SystemExit("Error: prepare.py produced no model files under torch-cache/ or the package")
+            raise SystemExit(
+                "Error: prepare.py produced no model files under torch-cache/ or the package"
+            )
         print("no models packaged")
         return
     total = 0
@@ -109,13 +164,22 @@ def prepare_and_verify(pkg: Path, python: str):
     print(f"models: {len(files)} files, {total / 1e6:.1f} MB total in {pkg}")
     loadable = sorted(str(f) for f in files if f.suffix in (".pt", ".pth"))
     if loadable:
-        r = subprocess.run([python, "-c", LOAD_CHECK, *loadable], capture_output=True, text=True)
+        r = subprocess.run(
+            [python, "-c", LOAD_CHECK, *loadable],
+            capture_output=True,
+            text=True,
+            env=clean_env(CUDA_VISIBLE_DEVICES=""),
+        )
         if r.returncode != 0:
-            raise SystemExit("Error: model not loadable with torch.load:\n" + r.stdout.strip() + r.stderr[-500:])
+            raise SystemExit(
+                "Error: model not loadable with torch.load:\n"
+                + r.stdout.strip()
+                + r.stderr[-500:]
+            )
         print(f"verified: {len(loadable)} .pt/.pth files load with torch.load")
 
 
-def build(src, lang, pkg, runtime, so, conda_exe):
+def build(src, lang, pkg, runtime, so, conda_exe, prepare_timeout=1800):
     if lang == "python":
         # conda wants to create the prefix itself, so env goes first, code copied over after
         subprocess.run(
@@ -132,9 +196,15 @@ def build(src, lang, pkg, runtime, so, conda_exe):
         )
         req = src / "requirements.txt"
         if req.is_file():
-            subprocess.run(
-                [str(pkg / "env/bin/pip"), "install", "-r", str(req)], check=True
-            )
+            with tempfile.NamedTemporaryFile(
+                "w", suffix=".txt"
+            ) as c:  # pip must not upgrade numpy to 2
+                c.write("numpy<2\n")
+                c.flush()
+                subprocess.run(
+                    [str(pkg / "env/bin/pip"), "install", "-r", str(req), "-c", c.name],
+                    check=True,
+                )
         lib = pkg / "env" / TORCH_LIB
         if not lib.is_file():
             raise SystemExit(
@@ -145,6 +215,11 @@ def build(src, lang, pkg, runtime, so, conda_exe):
                 f"Error: {lib} has statically linked cudart (a pip torch wheel replaced "
                 "conda's PyTorch); gpuless interception would fail. Remove the pip torch "
                 "from requirements.txt."
+            )
+        if not numpy_ok(str(pkg / "env/bin/python")):
+            raise SystemExit(
+                "Error: the env has numpy >= 2, which breaks torch 1.12 ('Numpy is not available'); "
+                "pin 'numpy<2' in requirements.txt"
             )
     copy_code(src, pkg)
     meta = {
@@ -158,7 +233,7 @@ def build(src, lang, pkg, runtime, so, conda_exe):
         meta["torch-home"] = "torch-cache"
     (pkg / "package.json").write_text(json.dumps(meta, indent=2) + "\n")
     if lang == "python":
-        prepare_and_verify(pkg, str(pkg / "env/bin/python"))
+        prepare_and_verify(pkg, str(pkg / "env/bin/python"), prepare_timeout)
 
 
 def pack(
@@ -170,6 +245,7 @@ def pack(
     so=None,
     conda_exe=None,
     force=False,
+    prepare_timeout=1800,
 ) -> Path:
     if not src.is_dir():
         raise SystemExit(f"Error: source directory '{src}' does not exist")
@@ -194,7 +270,7 @@ def pack(
         shutil.rmtree(pkg)
     pkg.parent.mkdir(parents=True, exist_ok=True)
     try:
-        build(src, lang, pkg, runtime, so, conda_exe)
+        build(src, lang, pkg, runtime, so, conda_exe, prepare_timeout)
     except BaseException:
         shutil.rmtree(pkg, ignore_errors=True)  # no partial packages
         raise
@@ -215,11 +291,26 @@ def main():
         action="store_true",
         help="replace an existing <dest>/<name> (otherwise refused)",
     )
+    p.add_argument(
+        "--prepare-timeout",
+        type=int,
+        default=1800,
+        metavar="SECONDS",
+        help="kill prepare.py after this long",
+    )
     a = p.parse_args()
     try:
         print(
             pack(
-                a.source, a.type, a.dest, a.runtime, a.name, a.so, a.conda_exe, a.force
+                a.source,
+                a.type,
+                a.dest,
+                a.runtime,
+                a.name,
+                a.so,
+                a.conda_exe,
+                a.force,
+                a.prepare_timeout,
             )
         )
     except subprocess.CalledProcessError as e:
