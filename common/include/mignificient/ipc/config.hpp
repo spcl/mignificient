@@ -48,6 +48,8 @@ struct IPCConfig {
     uint32_t poll_interval_us;
     // iceoryx2: each client gets its own iceoryx2 root directory under this base (client_root()).
     std::string client_root_base;
+    // iceoryx2 config file every process loads (ipc.iceoryx2-config); empty: iceoryx2's default lookup.
+    std::string iox2_config_file;
     // The client's event sockets live in its root, and a unix socket path has at most 107 bytes:
     // <root>/iox2_<u128>.event leaves 56 for the root, so 39 for the base.
     static constexpr size_t MAX_CLIENT_ROOT_BASE_LEN = 39;

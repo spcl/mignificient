@@ -1,3 +1,6 @@
+# iceoryx2 config of MIGnificient. The build copies it to <build>/config/iceoryx2.toml, the orchestrator's
+# ipc.iceoryx2-config points there, and every process loads it from $MIGNIFICIENT_IOX2_CONFIG (containers get
+# the file mounted read-only at the same path). global.root-path is replaced per client (ipc.client-root-base).
 [global]
 root-path = "/tmp/iceoryx2/"
 prefix = "iox2_"
@@ -26,7 +29,7 @@ cleanup-dead-nodes-on-destruction = true
 
 [defaults.publish-subscribe]
 max-subscribers = 8
-max-publishers = 2
+max-publishers = 8
 max-nodes = 20
 subscriber-max-buffer-size = 20
 subscriber-max-borrowed-samples = 2

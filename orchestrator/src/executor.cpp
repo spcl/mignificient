@@ -58,8 +58,12 @@ namespace mignificient { namespace orchestrator {
     envs.emplace_back(const_cast<char*>(resp_size.c_str()));
     envs.emplace_back(const_cast<char*>(queue_cap.c_str()));
     std::string iox2_root = fmt::format("{}={}", IOX2_ROOT_ENV, ipc_config.client_root(user_id));
+    std::string iox2_config = fmt::format("{}={}", IOX2_CONFIG_ENV, ipc_config.iox2_config_file);
     if(ipc_config.backend == ipc::IPCBackend::ICEORYX_V2) {
       envs.emplace_back(const_cast<char*>(iox2_root.c_str()));
+      if(!ipc_config.iox2_config_file.empty()) {
+        envs.emplace_back(const_cast<char*>(iox2_config.c_str()));
+      }
     }
 #endif
 
@@ -114,6 +118,10 @@ namespace mignificient { namespace orchestrator {
     if(auto root = _iox2_root()) {
       temporary_envs.push_back(fmt::format("{}={}", IOX2_ROOT_ENV, *root));
       envs.add(const_cast<char*>(temporary_envs.back().c_str()));
+      if(!_ipc_config.iox2_config_file.empty()) {
+        temporary_envs.push_back(fmt::format("{}={}", IOX2_CONFIG_ENV, _ipc_config.iox2_config_file));
+        envs.add(const_cast<char*>(temporary_envs.back().c_str()));
+      }
     }
 #endif
   }
@@ -220,6 +228,9 @@ namespace mignificient { namespace orchestrator {
     spec.env.emplace_back("GPULESS_QUEUE_CAPACITY", std::to_string(_ipc_config.buffer_configs.at("gpuless-executor").queue_capacity));
     if(auto root = _iox2_root()) {
       spec.env.emplace_back(IOX2_ROOT_ENV, *root);
+      if(!_ipc_config.iox2_config_file.empty()) {
+        spec.env.emplace_back(IOX2_CONFIG_ENV, _ipc_config.iox2_config_file);
+      }
     }
 #endif
 
@@ -312,6 +323,7 @@ namespace mignificient { namespace orchestrator {
     const std::string& image,
     const std::optional<std::string>& code_package,
     const std::optional<std::string>& iox2_root,
+    const std::string& iox2_config_file,
     const std::vector<std::pair<std::string, std::string>>& env_vars,
     const std::vector<std::string>& cmd
   )
@@ -345,11 +357,10 @@ namespace mignificient { namespace orchestrator {
       args.insert(args.end(), {"--mount", "type=bind,source=/dev/shm,target=/dev/shm"});
     }
 
-    // The host's iceoryx2 config (read-only; no IPC state), so both sides use the same defaults.
-    std::error_code ec;
-    const char* home = getenv("HOME");
-    if(home && std::filesystem::is_directory(fmt::format("{}/.config/iceoryx2", home), ec)) {
-      args.insert(args.end(), {"--mount", fmt::format("type=bind,source={}/.config/iceoryx2,target=/etc/iceoryx2,readonly", home)});
+    // The orchestrator's iceoryx2 config file (read-only, same path; $MIGNIFICIENT_IOX2_CONFIG points to it),
+    // so both sides use the same settings.
+    if(iox2_root.has_value() && !iox2_config_file.empty()) {
+      args.insert(args.end(), {"--mount", fmt::format("type=bind,source={0},target={0},readonly", iox2_config_file)});
     }
 
     // Lets the test harness find and clean up containers of one test run.
@@ -395,6 +406,9 @@ namespace mignificient { namespace orchestrator {
     env_vars.emplace_back("GPULESS_QUEUE_CAPACITY", std::to_string(_ipc_config.buffer_configs.at("gpuless-executor").queue_capacity));
     if(auto root = _iox2_root()) {
       env_vars.emplace_back(IOX2_ROOT_ENV, *root);
+      if(!_ipc_config.iox2_config_file.empty()) {
+        env_vars.emplace_back(IOX2_CONFIG_ENV, _ipc_config.iox2_config_file);
+      }
     }
 #endif
 
@@ -402,7 +416,7 @@ namespace mignificient { namespace orchestrator {
       env_vars.emplace_back("CPU_BIND_IDX", std::to_string(cpu_idx));
     }
 
-    _worker->start(_user, _container_argv(_container_runtime, _image, _code_package, _iox2_root(), env_vars, {_cpp_executor}));
+    _worker->start(_user, _container_argv(_container_runtime, _image, _code_package, _iox2_root(), _ipc_config.iox2_config_file, env_vars, {_cpp_executor}));
     return true;
   }
 
@@ -410,7 +424,7 @@ namespace mignificient { namespace orchestrator {
   {
     LaunchSpec spec = python_launch(poll_sleep, cpu_idx);
 
-    _worker->start(_user, _container_argv(_container_runtime, _image, _code_package, _iox2_root(), spec.env, spec.argv));
+    _worker->start(_user, _container_argv(_container_runtime, _image, _code_package, _iox2_root(), _ipc_config.iox2_config_file, spec.env, spec.argv));
     return true;
   }
 

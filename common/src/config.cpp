@@ -107,6 +107,15 @@ namespace mignificient { namespace ipc {
       }
     }
 
+    if (ipc.isMember("iceoryx2-config")) {
+      ipc_config.iox2_config_file = ipc["iceoryx2-config"].asString();
+      // Absolute: it is mounted at the same path in containers; ',' would break --mount.
+      if (!ipc_config.iox2_config_file.empty() &&
+          (ipc_config.iox2_config_file[0] != '/' || ipc_config.iox2_config_file.find(',') != std::string::npos)) {
+        throw std::runtime_error("ipc.iceoryx2-config must be an absolute path without ','");
+      }
+    }
+
     const char* env_gpuless_req = std::getenv("MIGNIFICIENT_GPULESS_REQUEST_SIZE");
     const char* env_gpuless_resp = std::getenv("MIGNIFICIENT_GPULESS_RESPONSE_SIZE");
 

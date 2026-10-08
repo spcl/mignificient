@@ -1,5 +1,8 @@
 
 #include <mignificient/orchestrator/orchestrator.hpp>
+#ifdef MIGNIFICIENT_WITH_ICEORYX2
+#include <mignificient/executor/iox2_config.hpp>
+#endif
 
 #include <cerrno>
 #include <cstring>
@@ -289,6 +292,14 @@ namespace mignificient { namespace orchestrator {
       // Each client gets its own node and iceoryx2 directory under this base (see Client).
       const auto& base = _ipc_config.client_root_base;
       _prepare_client_root_base(base);
+      // Our own client nodes read it through iox2_config(); children get it explicitly.
+      if(const auto& file = _ipc_config.iox2_config_file; !file.empty()) {
+        if(!std::filesystem::is_regular_file(file)) {
+          throw std::runtime_error(fmt::format("ipc.iceoryx2-config: {} is not a file", file));
+        }
+        setenv(IOX2_CONFIG_ENV, file.c_str(), 1);
+        spdlog::info("iceoryx2 config {}", file);
+      }
       spdlog::info("iceoryx2 client directories under {}", base);
     }
 #endif

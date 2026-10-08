@@ -5,6 +5,7 @@
   "ipc": {
     "backend": "iceoryx2",
     "client-root-base": "/dev/shm/mignificient",
+    "iceoryx2-config": "${CMAKE_BINARY_DIR}/config/iceoryx2.toml",
     "buffer-config": {
       "orchestrator-executor": {
         "invocation-size": 1048576,

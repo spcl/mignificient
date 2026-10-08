@@ -131,6 +131,11 @@ configure_file(
   ${CMAKE_BINARY_DIR}/config/orchestrator.json
 )
 configure_file(
+  ${CMAKE_SOURCE_DIR}/config/iceoryx2.toml
+  ${CMAKE_BINARY_DIR}/config/iceoryx2.toml
+  COPYONLY
+)
+configure_file(
   ${CMAKE_SOURCE_DIR}/config/invoker.json.in
   ${CMAKE_BINARY_DIR}/config/invoker.json
 )
