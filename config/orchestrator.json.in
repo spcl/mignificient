@@ -46,6 +46,8 @@
     "cpu-cap": false,
     "cgroup-root": "",
     "cgroup-include-gpuless": true,
+    "bandwidth-cap": false,
+    "link-bandwidth-gbps": 0,
     "container-runtime": "docker",
     "startup-timeout-ms": 30000,
     "package-roots": [],

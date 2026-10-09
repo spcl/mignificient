@@ -39,13 +39,17 @@ namespace mignificient { namespace orchestrator {
     SWAP_IN_CONFIRM = 12,
 
     OUT_OF_MEMORY = 13,
-    INVOCATION_FINISH = 14
+    INVOCATION_FINISH = 14,
+
+    // BANDWIDTH_SHARE + n: n clients with an invocation in flight on the GPU (bandwidth-cap).
+    BANDWIDTH_SHARE = 64
   };
 
   class GPUlessServer {
   public:
 
-    bool start(const ipc::IPCConfig& ipc_config, const std::string& user_id, GPUInstance& instance, bool poll_sleep, bool use_vmm, const Json::Value& config, float max_memory, int cpu_idx = -1);
+    // link_gbps > 0: the server limits its copies to the link's share (bandwidth-cap).
+    bool start(const ipc::IPCConfig& ipc_config, const std::string& user_id, GPUInstance& instance, bool poll_sleep, bool use_vmm, const Json::Value& config, float max_memory, int cpu_idx = -1, float link_gbps = 0);
 
     pid_t pid() const { return _pid; }
 

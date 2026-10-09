@@ -22,8 +22,13 @@ namespace mignificient { namespace orchestrator {
       _ipc_config(ipc_config),
       _container_worker(container_worker),
       _cpu_cap(config.get("cpu-cap", false).asBool()),
-      _cgroup_root(config.get("cgroup-root", "").asString())
+      _cgroup_root(config.get("cgroup-root", "").asString()),
+      _link_gbps(config.get("bandwidth-cap", false).asBool() ? config.get("link-bandwidth-gbps", 0).asFloat() : 0)
     {
+      if(config.get("bandwidth-cap", false).asBool() && _link_gbps <= 0) {
+        spdlog::critical("executor.bandwidth-cap needs executor.link-bandwidth-gbps (the host-GPU link's bandwidth)");
+        std::exit(EXIT_FAILURE);
+      }
       if(!_cpu_cap) {
         spdlog::info("CPU cap disabled (executor.cpu-cap): requests' cpu-cores are ignored");
       } else if(_cgroup_root.empty()) {
@@ -180,6 +185,26 @@ namespace mignificient { namespace orchestrator {
 
       SPDLOG_DEBUG("Processed invocation for function {} on client {}", fname, selected_client->id());
       return std::make_tuple(new_client_created ? selected_client : nullptr, true);
+    }
+
+    // bandwidth-cap: each gpuless server gets the number of clients with an invocation in flight on its physical GPU
+    // (MIG partitions share the link), and limits its copies to link/n.
+    void update_bandwidth_shares()
+    {
+      if(_link_gbps <= 0) {
+        return;
+      }
+      std::unordered_map<std::string, int> in_flight;
+      apply_clients([&](Client* c) {
+        if(c->in_flight()) {
+          in_flight[c->gpu_instance()->device_uuid()]++;
+        }
+      });
+      apply_clients([&](Client* c) {
+        if(c->gpuless_registered()) {
+          c->send_bandwidth_share(std::max(1, in_flight[c->gpu_instance()->device_uuid()]));
+        }
+      });
     }
 
     template<typename F>
@@ -348,7 +373,8 @@ namespace mignificient { namespace orchestrator {
         _config["use-vmm"].asBool(),
         _config["bare-metal-executor"],
         invocation->gpu_memory(),
-        gpuless_cpu_idx
+        gpuless_cpu_idx,
+        _link_gbps
       );
 
       std::string container_runtime = _config.isMember("container-runtime") ? _config["container-runtime"].asString() : "docker";
@@ -450,6 +476,8 @@ namespace mignificient { namespace orchestrator {
     bool _cpu_cap;
     // Parent of the per-client CPU-cap cgroups (bare-metal); required for bare-metal clients with cpu-cores.
     std::string _cgroup_root;
+    // bandwidth-cap: the host-GPU link's bandwidth, GB/s; 0: off.
+    float _link_gbps;
 
     int _index = 0;
     // TODO: this might require extension to support platforms where hyperthreads have consecutive IDs

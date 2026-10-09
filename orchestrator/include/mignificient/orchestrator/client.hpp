@@ -534,6 +534,26 @@ namespace mignificient { namespace orchestrator {
       return _active;
     }
 
+    bool gpuless_registered() const
+    {
+      return _gpuless_active;
+    }
+
+    // An invocation is running (CPU part included), so the client may copy data.
+    bool in_flight() const
+    {
+      return _active_invocation != nullptr;
+    }
+
+    // bandwidth-cap: tell the gpuless server how many clients share the GPU's link, when it changes.
+    void send_bandwidth_share(int clients)
+    {
+      if(clients != _bandwidth_share) {
+        _bandwidth_share = clients;
+        send_gpuless_msg(static_cast<GPUlessMessage>(static_cast<int>(GPUlessMessage::BANDWIDTH_SHARE) + clients));
+      }
+    }
+
     bool check_timeout() const
     {
       return _active_invocation && _active_invocation->is_timed_out();
@@ -595,6 +615,7 @@ namespace mignificient { namespace orchestrator {
     GPUInstance* _gpu_instance;
     std::unique_ptr<Executor> _executor;
     CpuCgroup _cgroup;
+    int _bandwidth_share = 0;
 
     ClientStatus _status = ClientStatus::NOT_ACTIVE;
 

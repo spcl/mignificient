@@ -438,6 +438,7 @@ namespace mignificient { namespace orchestrator {
       _check_timeouts();
       _check_oom();
       _check_startup();
+      _users.update_bandwidth_shares();
     }
   }
 
@@ -462,6 +463,7 @@ namespace mignificient { namespace orchestrator {
           _check_timeouts();
           _check_oom();
           _check_startup();
+          _users.update_bandwidth_shares();
           return iox2::CallbackProgression::Continue;
         }
 
@@ -491,6 +493,8 @@ namespace mignificient { namespace orchestrator {
 
         }
 
+        // Invocations started or finished, clients registered or died.
+        _users.update_bandwidth_shares();
         return iox2::CallbackProgression::Continue;
       }
     );

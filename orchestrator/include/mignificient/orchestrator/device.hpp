@@ -33,8 +33,9 @@ namespace mignificient { namespace orchestrator {
   class GPUInstance {
   public:
 
-    GPUInstance(const std::string& uuid, float memory, const std::string& instance_size, SharingModel model)
+    GPUInstance(const std::string& uuid, const std::string& device_uuid, float memory, const std::string& instance_size, SharingModel model)
         : _uuid(uuid),
+          _device_uuid(device_uuid),
           _memory(memory),
           _instance_size(instance_size),
           _sharing_model(model)
@@ -43,6 +44,12 @@ namespace mignificient { namespace orchestrator {
     const std::string& uuid() const
     {
       return _uuid;
+    }
+
+    // The physical GPU (MIG partitions share its host link).
+    const std::string& device_uuid() const
+    {
+      return _device_uuid;
     }
 
     float memory() const
@@ -268,6 +275,8 @@ namespace mignificient { namespace orchestrator {
 
   private:
     std::string _uuid;
+
+    std::string _device_uuid;
 
     float _memory;
 

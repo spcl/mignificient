@@ -33,6 +33,7 @@ namespace mignificient { namespace orchestrator {
     for (const auto& instance : instances) {
       _mig_instances.emplace_back(
         instance["uuid"].asString(),
+        _uuid,
         instance["memory"].asFloat(),
         instance["instance_size"].asString(),
         sharing_model
@@ -43,6 +44,7 @@ namespace mignificient { namespace orchestrator {
     // Artificially add a full device
     if(_mig_instances.size() == 0) {
       _mig_instances.emplace_back(
+        _uuid,
         _uuid,
         _memory,
         "7g",
